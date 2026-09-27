@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>علتي</title>
+<meta name="theme-color" content="#1d4785">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="علتي">
+<style>
+:root{
+  --bg:#f4f5f7; --card:#ffffff; --text:#1c1c1e; --muted:#6b7280;
+  --accent:#2563eb; --accent2:#16a34a; --border:#e5e7eb;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#111214; --card:#1c1d20; --text:#f2f2f2; --muted:#9aa0a6; --border:#2c2d30;
+  }
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px); height:100%;}
+*{box-sizing:border-box;}
+body{
+  margin:0; height:100%; background:var(--bg); color:var(--text);
+  font-family:-apple-system,"Segoe UI",Tahoma,Arial,sans-serif;
+}
+header{
+  position:sticky; top:env(safe-area-inset-top,0px); background:var(--bg);
+  padding:16px 16px 8px; border-bottom:1px solid var(--border);
+}
+h1{font-size:20px; margin:0 0 4px;}
+.sub{color:var(--muted); font-size:13px;}
+main{padding:16px; max-width:480px; margin:0 auto;}
+.card{
+  background:var(--card); border:1px solid var(--border); border-radius:14px;
+  padding:14px 16px; margin-bottom:12px;
+}
+.me-row{display:flex; align-items:center; justify-content:space-between; gap:8px;}
+.me-name{font-weight:600;}
+.small-btn{
+  background:transparent; border:1px solid var(--border); color:var(--muted);
+  padding:6px 10px; border-radius:8px; font-size:12px;
+}
+.share-btn{
+  width:100%; padding:14px; border:none; border-radius:12px; background:var(--accent2);
+  color:#fff; font-size:16px; font-weight:600; margin-top:10px;
+}
+.install-btn{
+  width:100%; padding:12px; border:none; border-radius:12px; background:var(--accent);
+  color:#fff; font-size:14px; font-weight:600; margin-bottom:12px;
+}
+.status{font-size:12px; color:var(--muted); margin-top:6px; min-height:16px;}
+.member{
+  display:flex; align-items:center; justify-content:space-between;
+  padding:12px 4px; border-bottom:1px solid var(--border);
+}
+.member:last-child{border-bottom:none;}
+.member-name{font-weight:600;}
+.member-time{font-size:12px; color:var(--muted);}
+.map-link{
+  color:var(--accent); text-decoration:none; font-size:13px; font-weight:600;
+  border:1px solid var(--accent); padding:6px 10px; border-radius:8px;
+}
+.name-setup{display:flex; flex-direction:column; gap:10px; align-items:center; text-align:center; padding-top:40px;}
+.name-setup input{
+  width:100%; max-width:260px; padding:12px; border-radius:10px; border:1px solid var(--border);
+  background:var(--card); color:var(--text); font-size:16px; text-align:center;
+}
+.name-setup button{
+  padding:12px 24px; border:none; border-radius:10px; background:var(--accent);
+  color:#fff; font-size:15px; font-weight:600;
+}
+.hidden{display:none;}
+.warn{
+  background:#fef3c7; color:#92400e; border-radius:10px; padding:10px 12px; font-size:12px; margin-bottom:12px;
+}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>👪 علتي</h1>
+  <div class="sub">مكان كل واحد في البيت</div>
+</header>
+
+<main>
+  <div id="warnBox" class="warn hidden"></div>
+  <button id="installBtn" class="install-btn hidden" onclick="doInstall()">⬇️ ثبّت التطبيق على تليفونك</button>
+
+  <div id="setupScreen" class="name-setup hidden">
+    <div style="font-size:15px;">إيه اسمك؟</div>
+    <input id="nameInput" placeholder="مثال: بابا / ماما / يوسف" maxlength="20">
+    <button onclick="saveName()">تمام، ابدأ</button>
+  </div>
+
+  <div id="appScreen" class="hidden">
+    <div class="card">
+      <div class="me-row">
+        <div>👤 أنا: <span class="me-name" id="meName"></span></div>
+        <button class="small-btn" onclick="changeName()">تغيير</button>
+      </div>
+      <button class="share-btn" onclick="shareLocation()">📍 شارك موقعي دلوقتي</button>
+      <div class="status" id="statusMsg"></div>
+    </div>
+
+    <div class="card">
+      <div style="font-weight:600; margin-bottom:6px;">أماكن العيلة</div>
+      <div id="membersList"><div class="status">بنجيب البيانات...</div></div>
+    </div>
+  </div>
+</main>
+
+<script type="module">
+// ⚙️ بيانات مشروع Firebase بتاعك
+const firebaseConfig = {
+  apiKey: "AIzaSyBiSgk74sDCw9ey1b45MVQinqo_QxJ4Ta0",
+  authDomain: "elty-fc7d6.firebaseapp.com",
+  projectId: "elty-fc7d6",
+  storageBucket: "elty-fc7d6.firebasestorage.app",
+  messagingSenderId: "467416499371",
+  appId: "1:467416499371:web:8dcb9cb5a44fe35da2a3ee"
+};
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import {
+  getFirestore, doc, setDoc, onSnapshot, collection
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+function showWarn(msg) {
+  const w = document.getElementById('warnBox');
+  w.textContent = '⚠️ ' + msg;
+  w.classList.remove('hidden');
+}
+
+let db = null;
+try {
+  const app = initializeApp(firebaseConfig);
+  db = getFirestore(app);
+} catch (e) {
+  showWarn('فشل تحميل Firebase: ' + (e && e.message ? e.message : e));
+}
+
+const myName = () => localStorage.getItem('elty_name');
+
+function showScreen() {
+  if (myName()) {
+    document.getElementById('setupScreen').classList.add('hidden');
+    document.getElementById('appScreen').classList.remove('hidden');
+    document.getElementById('meName').textContent = myName();
+    if (db) listenMembers();
+  } else {
+    document.getElementById('setupScreen').classList.remove('hidden');
+    document.getElementById('appScreen').classList.add('hidden');
+  }
+}
+
+window.saveName = function() {
+  const v = document.getElementById('nameInput').value.trim();
+  if (!v) return;
+  localStorage.setItem('elty_name', v);
+  showScreen();
+};
+
+window.changeName = function() {
+  localStorage.removeItem('elty_name');
+  showScreen();
+};
+
+window.shareLocation = function() {
+  const statusEl = document.getElementById('statusMsg');
+  if (!db) { statusEl.textContent = 'التطبيق لسه مش متصل، جرب تقفل وتفتح تاني.'; return; }
+  if (!navigator.geolocation) { statusEl.textContent = 'الجهاز مش بيدعم تحديد الموقع.'; return; }
+  statusEl.textContent = 'بنجيب موقعك...';
+  navigator.geolocation.getCurrentPosition(async (pos) => {
+    try {
+      await setDoc(doc(db, 'locations', myName()), {
+        lat: pos.coords.latitude,
+        lng: pos.coords.longitude,
+        updatedAt: Date.now()
+      });
+      statusEl.textContent = 'تم مشاركة موقعك ✅';
+    } catch (e) {
+      statusEl.textContent = 'حصل خطأ: ' + (e && e.message ? e.message : e);
+    }
+  }, () => {
+    statusEl.textContent = 'مسموحش بالوصول للموقع، افتح الإعدادات وسمح.';
+  }, { enableHighAccuracy: true, timeout: 10000 });
+};
+
+function timeAgo(ts) {
+  if (!ts) return 'لسه محدش عرف مكانه';
+  const diffMin = Math.round((Date.now() - ts) / 60000);
+  if (diffMin < 1) return 'دلوقتي';
+  if (diffMin < 60) return `من ${diffMin} دقيقة`;
+  const h = Math.round(diffMin / 60);
+  return `من ${h} ساعة`;
+}
+
+function listenMembers() {
+  onSnapshot(collection(db, 'locations'), (snap) => {
+    const list = document.getElementById('membersList');
+    list.innerHTML = '';
+    if (snap.empty) {
+      list.innerHTML = '<div class="status">محدش شارك مكانه لسه.</div>';
+      return;
+    }
+    snap.forEach(d => {
+      const data = d.data();
+      const row = document.createElement('div');
+      row.className = 'member';
+      const link = (data.lat && data.lng)
+        ? `<a class="map-link" target="_blank" href="https://www.google.com/maps?q=${data.lat},${data.lng}">🗺️ الخريطة</a>`
+        : '';
+      row.innerHTML = `
+        <div>
+          <div class="member-name">${d.id}</div>
+          <div class="member-time">${timeAgo(data.updatedAt)}</div>
+        </div>
+        ${link}`;
+      list.appendChild(row);
+    }, (err) => showWarn('خطأ في القراءة: ' + err.message));
+  });
+}
+
+showScreen();
+setInterval(() => { if (db && myName()) shareLocation(); }, 180000);
+
+// ---- تثبيت التطبيق (PWA install prompt) ----
+let deferredPrompt = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+  document.getElementById('installBtn').classList.remove('hidden');
+});
+window.doInstall = async function() {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  await deferredPrompt.userChoice;
+  deferredPrompt = null;
+  document.getElementById('installBtn').classList.add('hidden');
+};
+window.addEventListener('appinstalled', () => {
+  document.getElementById('installBtn').classList.add('hidden');
+});
+
+// iOS مش بيدعم البانر التلقائي - نوريله تعليمات بسيطة
+const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+if (isIOS && !isStandalone) {
+  const btn = document.getElementById('installBtn');
+  btn.textContent = '⬇️ للتثبيت: دوس زر المشاركة 📤 ثم "إضافة إلى الشاشة الرئيسية"';
+  btn.classList.remove('hidden');
+  btn.onclick = null;
+}
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>
