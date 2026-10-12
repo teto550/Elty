@@ -27,7 +27,7 @@ html{scroll-padding-top:env(safe-area-inset-top,0px); height:100%;}
 *{box-sizing:border-box;}
 body{
   margin:0; height:100%; background:var(--bg); color:var(--text);
-  font-family:-apple-system,"Segoe UI",Tahoma,Arial,sans-serif;
+  font-family:-apple-system,Roboto,"Segoe UI",Tahoma,Arial,sans-serif;
 }
 header{
   position:sticky; top:env(safe-area-inset-top,0px); background:var(--bg);
@@ -106,6 +106,7 @@ main{padding:16px; max-width:480px; margin:0 auto;}
       </div>
       <button class="share-btn" onclick="shareLocation()">📍 شارك موقعي دلوقتي</button>
       <div class="status" id="statusMsg"></div>
+      <div class="status">الموقع بيتحدث طول ما التطبيق مفتوح على الشاشة.</div>
     </div>
 
     <div class="card">
@@ -189,7 +190,7 @@ window.shareLocation = function() {
     }
   }, () => {
     statusEl.textContent = 'مسموحش بالوصول للموقع، افتح الإعدادات وسمح.';
-  }, { enableHighAccuracy: true, timeout: 10000 });
+  }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 });
 };
 
 function timeAgo(ts) {
@@ -201,8 +202,14 @@ function timeAgo(ts) {
   return `من ${h} ساعة`;
 }
 
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+let unsubMembers = null;
 function listenMembers() {
-  onSnapshot(collection(db, 'locations'), (snap) => {
+  if (unsubMembers) unsubMembers();
+  unsubMembers = onSnapshot(collection(db, 'locations'), (snap) => {
     const list = document.getElementById('membersList');
     list.innerHTML = '';
     if (snap.empty) {
@@ -218,17 +225,28 @@ function listenMembers() {
         : '';
       row.innerHTML = `
         <div>
-          <div class="member-name">${d.id}</div>
+          <div class="member-name">${esc(d.id)}</div>
           <div class="member-time">${timeAgo(data.updatedAt)}</div>
         </div>
         ${link}`;
       list.appendChild(row);
-    }, (err) => showWarn('خطأ في القراءة: ' + err.message));
-  });
+    });
+  }, (err) => showWarn('خطأ في القراءة: ' + err.message));
 }
 
 showScreen();
-setInterval(() => { if (db && myName()) shareLocation(); }, 180000);
+let lastShare = 0;
+const autoShare = () => {
+  if (db && myName() && document.visibilityState === 'visible') {
+    lastShare = Date.now();
+    shareLocation();
+  }
+};
+setInterval(autoShare, 180000);
+// أندرويد بيوقف التايمر والتطبيق في الخلفية، فنحدّث الموقع أول ما التطبيق يرجع قدام
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && Date.now() - lastShare > 60000) autoShare();
+});
 
 // ---- تثبيت التطبيق (PWA install prompt) ----
 let deferredPrompt = null;
