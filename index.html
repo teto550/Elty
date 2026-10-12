@@ -90,6 +90,10 @@ main{padding:16px; max-width:480px; margin:0 auto;}
 
 <main>
   <div id="warnBox" class="warn hidden"></div>
+  <div id="batteryBox" class="warn hidden">
+    لازم تسمح للتطبيق يشتغل في الخلفية من غير قيود توفير الطاقة، وإلا الموبايل هيوقف التتبع.
+    <button class="install-btn" style="margin:8px 0 0" onclick="askBattery()">🔋 اسمح بالعمل في الخلفية</button>
+  </div>
   <button id="installBtn" class="install-btn hidden" onclick="doInstall()">⬇️ ثبّت التطبيق على تليفونك</button>
 
   <div id="setupScreen" class="name-setup hidden">
@@ -196,8 +200,26 @@ async function writeLocationNative(lat, lng) {
   });
 }
 
+let batteryPlugin = null;
+async function checkBattery() {
+  if (!isNative) return;
+  try {
+    if (!batteryPlugin) batteryPlugin = window.Capacitor.registerPlugin('ElityBattery');
+    const r = await batteryPlugin.isIgnoring();
+    document.getElementById('batteryBox').classList.toggle('hidden', !!r.value);
+  } catch (e) {}
+}
+window.askBattery = async function() {
+  try {
+    if (!batteryPlugin) batteryPlugin = window.Capacitor.registerPlugin('ElityBattery');
+    await batteryPlugin.request();
+  } catch (e) {}
+};
+
 async function startNativeTracking() {
-  if (!isNative || watcherId || !myName()) return;
+  if (!isNative || !myName()) return;
+  checkBattery();
+  if (watcherId) return;
   const statusEl = document.getElementById('statusMsg');
   try {
     const LN = window.Capacitor.Plugins.LocalNotifications;
@@ -312,6 +334,7 @@ const autoShare = () => {
 setInterval(autoShare, 180000);
 // أندرويد بيوقف التايمر والتطبيق في الخلفية، فنحدّث الموقع أول ما التطبيق يرجع قدام
 document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') checkBattery();
   if (document.visibilityState === 'visible' && Date.now() - lastShare > 60000) autoShare();
 });
 
