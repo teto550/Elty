@@ -56,4 +56,23 @@ open(bg, 'w', encoding='utf-8').write('''<?xml version="1.0" encoding="utf-8"?>
     <color name="ic_launcher_background">#FFFFFF</color>
 </resources>
 ''')
+# 4) Fixed signing key (so new builds install over old ones) + increasing versionCode
+import re
+g = 'android/app/build.gradle'
+t = open(g, encoding='utf-8').read()
+t = re.sub(r'versionCode\s+\d+', 'versionCode ' + os.environ.get('RUN_NUMBER', '1'), t, count=1)
+t += '''
+
+android {
+    signingConfigs {
+        debug {
+            storeFile file('../../signing/elty.keystore')
+            storePassword 'eltyfamily2026'
+            keyAlias 'elty'
+            keyPassword 'eltyfamily2026'
+        }
+    }
+}
+'''
+open(g, 'w', encoding='utf-8').write(t)
 print('android setup done')

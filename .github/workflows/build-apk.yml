@@ -35,6 +35,8 @@ jobs:
         run: npx cap add android
 
       - name: Configure Android project (permissions, battery plugin, icons)
+        env:
+          RUN_NUMBER: ${{ github.run_number }}
         run: |
           pip install pillow
           python3 scripts/android_setup.py
@@ -45,6 +47,11 @@ jobs:
           cd android
           chmod +x gradlew
           ./gradlew assembleDebug
+
+      - name: Verify APK signature is stable
+        run: |
+          APKSIGNER=$(ls $ANDROID_HOME/build-tools/*/apksigner | sort | tail -1)
+          $APKSIGNER verify --print-certs android/app/build/outputs/apk/debug/app-debug.apk | head -3
 
       - uses: actions/upload-artifact@v4
         with:
