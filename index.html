@@ -10,6 +10,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="علتي">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
 :root{
   --bg:#f4f5f7; --card:#ffffff; --text:#1c1c1e; --muted:#6b7280;
@@ -75,6 +77,28 @@ main{padding:16px; max-width:480px; margin:0 auto;}
   padding:12px 24px; border:none; border-radius:10px; background:var(--accent);
   color:#fff; font-size:15px; font-weight:600;
 }
+.role-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px; width:100%; max-width:260px;}
+.name-setup .role-btn{
+  padding:12px 8px; border-radius:10px; border:2px solid var(--border);
+  background:var(--card); color:var(--text); font-size:16px; font-weight:600;
+}
+.name-setup .role-btn.sel{border-color:var(--accent); background:var(--accent); color:#fff;}
+#map{height:55vh; min-height:320px; border-radius:10px; overflow:hidden; z-index:0; direction:ltr;}
+.leaflet-popup-content{direction:rtl; text-align:right; font-family:inherit; line-height:1.7;}
+.pin-wrap{background:none; border:none;}
+.pin{position:absolute; transform:translate(-50%,-100%); display:flex; flex-direction:column; align-items:center;}
+.pin-label{
+  background:#1d4785; color:#fff; font-size:12px; font-weight:700; padding:3px 8px;
+  border-radius:10px; white-space:nowrap; box-shadow:0 1px 4px rgba(0,0,0,.35);
+}
+.pin-dot{
+  margin-top:2px; width:32px; height:32px; border-radius:50%; background:#fff; font-size:20px;
+  display:flex; align-items:center; justify-content:center; border:2px solid #1d4785;
+  box-shadow:0 1px 4px rgba(0,0,0,.35);
+}
+.pin.me .pin-label{background:#16a34a;}
+.pin.me .pin-dot{border-color:#16a34a;}
+.member-btns{display:flex; gap:6px; align-items:center;}
 .hidden{display:none;}
 .warn{
   background:#fef3c7; color:#92400e; border-radius:10px; padding:10px 12px; font-size:12px; margin-bottom:12px;
@@ -98,20 +122,33 @@ main{padding:16px; max-width:480px; margin:0 auto;}
   <button id="installBtn" class="install-btn hidden" onclick="doInstall()">⬇️ ثبّت التطبيق على تليفونك</button>
 
   <div id="setupScreen" class="name-setup hidden">
+    <div style="font-size:15px;">انت مين في العيلة؟</div>
+    <div class="role-grid">
+      <button type="button" class="role-btn" data-role="father">👨 أب</button>
+      <button type="button" class="role-btn" data-role="mother">👩 أم</button>
+      <button type="button" class="role-btn" data-role="son">👦 ابن</button>
+      <button type="button" class="role-btn" data-role="daughter">👧 ابنة</button>
+    </div>
     <div style="font-size:15px;">إيه اسمك؟</div>
-    <input id="nameInput" placeholder="مثال: بابا / ماما / يوسف" maxlength="20">
+    <input id="nameInput" placeholder="اكتب اسمك" maxlength="20">
     <button onclick="saveName()">تمام، ابدأ</button>
+    <div class="status" id="setupMsg"></div>
   </div>
 
   <div id="appScreen" class="hidden">
     <div class="card">
       <div class="me-row">
-        <div>👤 أنا: <span class="me-name" id="meName"></span></div>
+        <div>👤 أنا: <span class="me-name" id="meName"></span> <span class="sub" id="meRole"></span></div>
         <button class="small-btn" onclick="changeName()">تغيير</button>
       </div>
       <button class="share-btn" onclick="shareLocation()">📍 شارك موقعي دلوقتي</button>
       <div class="status" id="statusMsg"></div>
       <div class="status" id="bgHint">الموقع بيتحدث طول ما التطبيق مفتوح على الشاشة.</div>
+    </div>
+
+    <div class="card" style="padding:8px;">
+      <div id="map"></div>
+      <button class="small-btn" style="margin-top:8px;" onclick="fitAll()">🎯 اعرض الكل</button>
     </div>
 
     <div class="card">
@@ -134,7 +171,7 @@ const firebaseConfig = {
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
-  getFirestore, doc, setDoc, onSnapshot, collection
+  getFirestore, doc, setDoc, deleteDoc, onSnapshot, collection
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 function showWarn(msg) {
@@ -152,30 +189,54 @@ try {
 }
 
 const myName = () => localStorage.getItem('elty_name');
+const myRole = () => localStorage.getItem('elty_role');
 
 function showScreen() {
-  if (myName()) {
+  if (myName() && myRole()) {
     document.getElementById('setupScreen').classList.add('hidden');
     document.getElementById('appScreen').classList.remove('hidden');
     document.getElementById('meName').textContent = myName();
+    const r = ROLES[myRole()];
+    document.getElementById('meRole').textContent = r ? '(' + r.label + ')' : '';
+    initMap();
+    if (map) setTimeout(() => map.invalidateSize(), 0);
     if (db) listenMembers();
     startNativeTracking();
   } else {
     document.getElementById('setupScreen').classList.remove('hidden');
     document.getElementById('appScreen').classList.add('hidden');
+    if (myName()) document.getElementById('nameInput').value = myName();
   }
 }
 
+let pickedRole = myRole();
+function markRole() {
+  document.querySelectorAll('.role-btn').forEach(b => b.classList.toggle('sel', b.dataset.role === pickedRole));
+}
+document.querySelectorAll('.role-btn').forEach(b => {
+  b.onclick = () => { pickedRole = b.dataset.role; markRole(); };
+});
+markRole();
+
 window.saveName = function() {
   const v = document.getElementById('nameInput').value.trim();
-  if (!v) return;
+  const msg = document.getElementById('setupMsg');
+  if (!pickedRole) { msg.textContent = 'اختار انت مين في العيلة الأول.'; return; }
+  if (!v) { msg.textContent = 'اكتب اسمك.'; return; }
+  msg.textContent = '';
   localStorage.setItem('elty_name', v);
+  localStorage.setItem('elty_role', pickedRole);
   showScreen();
 };
 
 window.changeName = function() {
   stopNativeTracking();
+  if (db && myName()) deleteDoc(doc(db, 'locations', myName())).catch(() => {});
   localStorage.removeItem('elty_name');
+  localStorage.removeItem('elty_role');
+  pickedRole = null;
+  markRole();
+  document.getElementById('nameInput').value = '';
   showScreen();
 };
 
@@ -196,6 +257,7 @@ async function writeLocationNative(lat, lng) {
     data: { fields: {
       lat: { doubleValue: lat },
       lng: { doubleValue: lng },
+      role: { stringValue: myRole() || '' },
       updatedAt: { integerValue: String(Date.now()) }
     } }
   });
@@ -271,6 +333,7 @@ window.shareLocation = function() {
       await setDoc(doc(db, 'locations', myName()), {
         lat: pos.coords.latitude,
         lng: pos.coords.longitude,
+        role: myRole() || '',
         updatedAt: Date.now()
       });
       statusEl.textContent = 'تم مشاركة موقعك ✅';
@@ -295,33 +358,115 @@ function esc(s) {
   return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
+const ROLES = {
+  father: { label: 'أب', icon: '👨' },
+  mother: { label: 'أم', icon: '👩' },
+  son: { label: 'ابن', icon: '👦' },
+  daughter: { label: 'ابنة', icon: '👧' }
+};
+let map = null, markers = {}, lastDocs = [], fitted = false;
+
+function fmtTime(ts) {
+  if (!ts) return '—';
+  const d = new Date(ts), now = new Date();
+  const t = d.toLocaleTimeString('ar-EG', { hour: 'numeric', minute: '2-digit' });
+  const day = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diffDays = Math.round((day(now) - day(d)) / 86400000);
+  if (diffDays === 0) return 'النهاردة ' + t;
+  if (diffDays === 1) return 'امبارح ' + t;
+  return d.toLocaleDateString('ar-EG', { day: 'numeric', month: 'long' }) + ' ' + t;
+}
+
+function initMap() {
+  if (map || !window.L) return;
+  map = L.map('map').setView([30.0444, 31.2357], 11);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19, attribution: '© OpenStreetMap'
+  }).addTo(map);
+}
+
+window.fitAll = function() {
+  if (!map) return;
+  const pts = Object.values(markers).map(m => m.getLatLng());
+  if (!pts.length) return;
+  if (pts.length === 1) map.setView(pts[0], 16);
+  else map.fitBounds(L.latLngBounds(pts), { padding: [50, 50], maxZoom: 17 });
+};
+
+function focusMember(id) {
+  const m = markers[id];
+  if (!m || !map) return;
+  map.setView(m.getLatLng(), 17);
+  m.openPopup();
+  document.getElementById('map').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function pinIcon(id, role, isMe) {
+  return L.divIcon({
+    className: 'pin-wrap', iconSize: [0, 0],
+    html: `<div class="pin${isMe ? ' me' : ''}"><div class="pin-label">${esc(id)}</div><div class="pin-dot">${role ? role.icon : '📍'}</div></div>`
+  });
+}
+
+function renderMembers() {
+  const list = document.getElementById('membersList');
+  list.innerHTML = '';
+  if (!lastDocs.length) list.innerHTML = '<div class="status">محدش شارك مكانه لسه.</div>';
+  const seen = new Set();
+  lastDocs.forEach(({ id, data }) => {
+    const role = ROLES[data.role];
+    const hasPos = data.lat && data.lng;
+    const popup = `<b>${esc(id)}</b>${role ? ' (' + role.label + ')' : ''}<br>آخر تحديث للموقع:<br><b>${fmtTime(data.updatedAt)}</b><br>${timeAgo(data.updatedAt)}`;
+    if (hasPos && map) {
+      seen.add(id);
+      const isMe = id === myName();
+      if (markers[id]) {
+        markers[id].setLatLng([data.lat, data.lng]);
+        markers[id].setIcon(pinIcon(id, role, isMe));
+        markers[id].setPopupContent(popup);
+      } else {
+        markers[id] = L.marker([data.lat, data.lng], { icon: pinIcon(id, role, isMe) }).addTo(map).bindPopup(popup);
+      }
+    }
+    const row = document.createElement('div');
+    row.className = 'member';
+    row.innerHTML = `
+      <div>
+        <div class="member-name">${role ? role.icon + ' ' : ''}${esc(id)}${role ? ' <span class="member-time">(' + role.label + ')</span>' : ''}</div>
+        <div class="member-time">آخر تحديث: ${fmtTime(data.updatedAt)} · ${timeAgo(data.updatedAt)}</div>
+      </div>
+      <div class="member-btns"></div>`;
+    const btns = row.querySelector('.member-btns');
+    if (hasPos) {
+      const focus = document.createElement('button');
+      focus.className = 'map-link'; focus.style.background = 'transparent';
+      focus.textContent = '📍 على الخريطة';
+      focus.onclick = () => focusMember(id);
+      btns.appendChild(focus);
+      const gm = document.createElement('a');
+      gm.className = 'map-link'; gm.target = '_blank';
+      gm.href = `https://www.google.com/maps?q=${data.lat},${data.lng}`;
+      gm.textContent = '🗺️';
+      btns.appendChild(gm);
+    }
+    list.appendChild(row);
+  });
+  Object.keys(markers).forEach(id => {
+    if (!seen.has(id)) { markers[id].remove(); delete markers[id]; }
+  });
+  if (!fitted && Object.keys(markers).length) { fitted = true; fitAll(); }
+}
+
 let unsubMembers = null;
 function listenMembers() {
   if (unsubMembers) unsubMembers();
   unsubMembers = onSnapshot(collection(db, 'locations'), (snap) => {
-    const list = document.getElementById('membersList');
-    list.innerHTML = '';
-    if (snap.empty) {
-      list.innerHTML = '<div class="status">محدش شارك مكانه لسه.</div>';
-      return;
-    }
-    snap.forEach(d => {
-      const data = d.data();
-      const row = document.createElement('div');
-      row.className = 'member';
-      const link = (data.lat && data.lng)
-        ? `<a class="map-link" target="_blank" href="https://www.google.com/maps?q=${data.lat},${data.lng}">🗺️ الخريطة</a>`
-        : '';
-      row.innerHTML = `
-        <div>
-          <div class="member-name">${esc(d.id)}</div>
-          <div class="member-time">${timeAgo(data.updatedAt)}</div>
-        </div>
-        ${link}`;
-      list.appendChild(row);
-    });
+    lastDocs = [];
+    snap.forEach(d => lastDocs.push({ id: d.id, data: d.data() }));
+    renderMembers();
   }, (err) => showWarn('خطأ في القراءة: ' + err.message));
 }
+setInterval(() => { if (lastDocs.length) renderMembers(); }, 60000);
 
 if (isNative) document.getElementById('bgHint').textContent = 'الموقع بيتحدث تلقائياً حتى لو التطبيق مقفول (لما تتحرك).';
 if (!isNative && /android/i.test(navigator.userAgent)) document.getElementById('apkBtn').style.display = 'block';
