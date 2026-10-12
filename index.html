@@ -94,6 +94,7 @@ main{padding:16px; max-width:480px; margin:0 auto;}
     لازم تسمح للتطبيق يشتغل في الخلفية من غير قيود توفير الطاقة، وإلا الموبايل هيوقف التتبع.
     <button class="install-btn" style="margin:8px 0 0" onclick="askBattery()">🔋 اسمح بالعمل في الخلفية</button>
   </div>
+  <a id="apkBtn" class="install-btn" style="display:none; text-align:center; text-decoration:none;" href="https://github.com/teto550/elty/releases/download/latest/elty.apk">📲 نزّل تطبيق الأندرويد (بيشتغل في الخلفية)</a>
   <button id="installBtn" class="install-btn hidden" onclick="doInstall()">⬇️ ثبّت التطبيق على تليفونك</button>
 
   <div id="setupScreen" class="name-setup hidden">
@@ -323,6 +324,7 @@ function listenMembers() {
 }
 
 if (isNative) document.getElementById('bgHint').textContent = 'الموقع بيتحدث تلقائياً حتى لو التطبيق مقفول (لما تتحرك).';
+if (!isNative && /android/i.test(navigator.userAgent)) document.getElementById('apkBtn').style.display = 'block';
 showScreen();
 let lastShare = 0;
 const autoShare = () => {
