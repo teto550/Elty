@@ -106,7 +106,7 @@ main{padding:16px; max-width:480px; margin:0 auto;}
       </div>
       <button class="share-btn" onclick="shareLocation()">📍 شارك موقعي دلوقتي</button>
       <div class="status" id="statusMsg"></div>
-      <div class="status">الموقع بيتحدث طول ما التطبيق مفتوح على الشاشة.</div>
+      <div class="status" id="bgHint">الموقع بيتحدث طول ما التطبيق مفتوح على الشاشة.</div>
     </div>
 
     <div class="card">
@@ -154,6 +154,7 @@ function showScreen() {
     document.getElementById('appScreen').classList.remove('hidden');
     document.getElementById('meName').textContent = myName();
     if (db) listenMembers();
+    startNativeTracking();
   } else {
     document.getElementById('setupScreen').classList.remove('hidden');
     document.getElementById('appScreen').classList.add('hidden');
@@ -168,9 +169,74 @@ window.saveName = function() {
 };
 
 window.changeName = function() {
+  stopNativeTracking();
   localStorage.removeItem('elty_name');
   showScreen();
 };
+
+// ---- التتبع في الخلفية (نسخة تطبيق الأندرويد فقط) ----
+const isNative = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+let bgPlugin = null;
+let watcherId = null;
+let lastNativeWrite = 0;
+
+// الكتابة بتتم عن طريق HTTP native عشان أندرويد بيقيّد طلبات الـ WebView بعد 5 دقايق في الخلفية
+async function writeLocationNative(lat, lng) {
+  const name = encodeURIComponent(myName());
+  const url = `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/(default)/documents/locations/${name}?key=${firebaseConfig.apiKey}`;
+  await window.Capacitor.Plugins.CapacitorHttp.request({
+    url,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    data: { fields: {
+      lat: { doubleValue: lat },
+      lng: { doubleValue: lng },
+      updatedAt: { integerValue: String(Date.now()) }
+    } }
+  });
+}
+
+async function startNativeTracking() {
+  if (!isNative || watcherId || !myName()) return;
+  const statusEl = document.getElementById('statusMsg');
+  try {
+    const LN = window.Capacitor.Plugins.LocalNotifications;
+    if (LN) await LN.requestPermissions();
+  } catch (e) {}
+  bgPlugin = window.Capacitor.registerPlugin('BackgroundGeolocation');
+  try {
+    watcherId = await bgPlugin.addWatcher({
+      backgroundTitle: 'علتي',
+      backgroundMessage: 'مشاركة موقعك مع العيلة شغالة',
+      requestPermissions: true,
+      stale: false,
+      distanceFilter: 30
+    }, async (loc, err) => {
+      if (err) {
+        if (err.code === 'NOT_AUTHORIZED') {
+          statusEl.textContent = 'لازم تسمح بالموقع من إعدادات التطبيق.';
+          bgPlugin.openSettings();
+        }
+        return;
+      }
+      if (!loc || Date.now() - lastNativeWrite < 30000) return;
+      lastNativeWrite = Date.now();
+      try {
+        await writeLocationNative(loc.latitude, loc.longitude);
+        statusEl.textContent = 'آخر تحديث للموقع: دلوقتي ✅';
+      } catch (e) {
+        statusEl.textContent = 'تعذر إرسال الموقع: ' + (e && e.message ? e.message : e);
+      }
+    });
+  } catch (e) {
+    statusEl.textContent = 'تعذر تشغيل التتبع: ' + (e && e.message ? e.message : e);
+  }
+}
+
+function stopNativeTracking() {
+  if (bgPlugin && watcherId) bgPlugin.removeWatcher({ id: watcherId });
+  watcherId = null;
+}
 
 window.shareLocation = function() {
   const statusEl = document.getElementById('statusMsg');
@@ -234,10 +300,11 @@ function listenMembers() {
   }, (err) => showWarn('خطأ في القراءة: ' + err.message));
 }
 
+if (isNative) document.getElementById('bgHint').textContent = 'الموقع بيتحدث تلقائياً حتى لو التطبيق مقفول (لما تتحرك).';
 showScreen();
 let lastShare = 0;
 const autoShare = () => {
-  if (db && myName() && document.visibilityState === 'visible') {
+  if (!isNative && db && myName() && document.visibilityState === 'visible') {
     lastShare = Date.now();
     shareLocation();
   }

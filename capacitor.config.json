@@ -1,0 +1,8 @@
+{
+  "appId": "com.datapulse.elty",
+  "appName": "علتي",
+  "webDir": "www",
+  "android": {
+    "useLegacyBridge": true
+  }
+}
