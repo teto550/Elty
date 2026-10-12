@@ -99,6 +99,13 @@ main{padding:16px; max-width:480px; margin:0 auto;}
 .pin.me .pin-label{background:#16a34a;}
 .pin.me .pin-dot{border-color:#16a34a;}
 .member-btns{display:flex; gap:6px; align-items:center;}
+.toast{
+  position:fixed; bottom:20px; left:50%; transform:translateX(-50%); z-index:9999;
+  background:#1d4785; color:#fff; padding:12px 16px; border-radius:12px; font-size:14px;
+  max-width:90%; text-align:center; box-shadow:0 2px 10px rgba(0,0,0,.35);
+}
+.place-tip{background:#7c3aed; color:#fff; border:none; font-weight:700; font-size:12px; box-shadow:none;}
+.place-tip:before{border-top-color:#7c3aed !important;}
 .hidden{display:none;}
 .warn{
   background:#fef3c7; color:#92400e; border-radius:10px; padding:10px 12px; font-size:12px; margin-bottom:12px;
@@ -155,8 +162,24 @@ main{padding:16px; max-width:480px; margin:0 auto;}
       <div style="font-weight:600; margin-bottom:6px;">أماكن العيلة</div>
       <div id="membersList"><div class="status">بنجيب البيانات...</div></div>
     </div>
+
+    <div class="card">
+      <div style="font-weight:600; margin-bottom:6px;">📌 الأماكن المهمة (بيت / شغل / جامعة)</div>
+      <div id="placesList"></div>
+      <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">
+        <button class="small-btn" onclick="addPlaceHere()">📍 مكاني الحالي</button>
+        <button class="small-btn" onclick="addPlaceOnMap()">🗺️ اختار من الخريطة</button>
+      </div>
+      <div class="status" id="placeMsg"></div>
+    </div>
+
+    <div class="card">
+      <div style="font-weight:600; margin-bottom:6px;">🔔 آخر الوصولات</div>
+      <div id="eventsList"><div class="status">بنجيب البيانات...</div></div>
+    </div>
   </div>
 </main>
+<div id="toast" class="toast hidden"></div>
 
 <script type="module">
 // ⚙️ بيانات مشروع Firebase بتاعك
@@ -171,7 +194,7 @@ const firebaseConfig = {
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
-  getFirestore, doc, setDoc, deleteDoc, onSnapshot, collection
+  getFirestore, doc, setDoc, addDoc, deleteDoc, onSnapshot, collection, query, orderBy, limit
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 function showWarn(msg) {
@@ -199,8 +222,10 @@ function showScreen() {
     const r = ROLES[myRole()];
     document.getElementById('meRole').textContent = r ? '(' + r.label + ')' : '';
     initMap();
+    renderPlaces();
     if (map) setTimeout(() => map.invalidateSize(), 0);
-    if (db) listenMembers();
+    if (db) { listenMembers(); listenPlaces(); listenEvents(); }
+    startBackground();
     startNativeTracking();
   } else {
     document.getElementById('setupScreen').classList.remove('hidden');
@@ -234,6 +259,8 @@ window.changeName = function() {
   if (db && myName()) deleteDoc(doc(db, 'locations', myName())).catch(() => {});
   localStorage.removeItem('elty_name');
   localStorage.removeItem('elty_role');
+  localStorage.removeItem('elty_inside');
+  localStorage.removeItem('elty_last_event');
   pickedRole = null;
   markRole();
   document.getElementById('nameInput').value = '';
@@ -286,7 +313,10 @@ async function startNativeTracking() {
   const statusEl = document.getElementById('statusMsg');
   try {
     const LN = window.Capacitor.Plugins.LocalNotifications;
-    if (LN) await LN.requestPermissions();
+    if (LN) {
+      await LN.requestPermissions();
+      await LN.createChannel({ id: 'arrivals', name: 'وصول أفراد العيلة', importance: 4, vibration: true });
+    }
   } catch (e) {}
   bgPlugin = window.Capacitor.registerPlugin('BackgroundGeolocation');
   try {
@@ -304,8 +334,11 @@ async function startNativeTracking() {
         }
         return;
       }
-      if (!loc || Date.now() - lastNativeWrite < 30000) return;
+      if (!loc) return;
+      checkArrival(loc.latitude, loc.longitude);
+      if (Date.now() - lastNativeWrite < 30000) return;
       lastNativeWrite = Date.now();
+      pollEvents();
       try {
         await writeLocationNative(loc.latitude, loc.longitude);
         statusEl.textContent = 'آخر تحديث للموقع: دلوقتي ✅';
@@ -337,6 +370,7 @@ window.shareLocation = function() {
         updatedAt: Date.now()
       });
       statusEl.textContent = 'تم مشاركة موقعك ✅';
+      checkArrival(pos.coords.latitude, pos.coords.longitude);
     } catch (e) {
       statusEl.textContent = 'حصل خطأ: ' + (e && e.message ? e.message : e);
     }
@@ -467,6 +501,256 @@ function listenMembers() {
   }, (err) => showWarn('خطأ في القراءة: ' + err.message));
 }
 setInterval(() => { if (lastDocs.length) renderMembers(); }, 60000);
+
+// ---- الأماكن المهمة + إشعارات الوصول ----
+const FS = `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/(default)/documents`;
+const FSKEY = `key=${firebaseConfig.apiKey}`;
+let placesCache = [];
+try { placesCache = JSON.parse(localStorage.getItem('elty_places') || '[]'); } catch (e) {}
+let placeLayers = {};
+let polling = false;
+let notifId = Math.floor(Date.now() / 1000) % 1000000;
+let pickingPlace = false;
+
+const fval = (f) => !f ? undefined
+  : ('stringValue' in f) ? f.stringValue
+  : ('doubleValue' in f) ? f.doubleValue
+  : ('integerValue' in f) ? Number(f.integerValue) : undefined;
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.remove('hidden');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => t.classList.add('hidden'), 7000);
+}
+
+// طلبات HTTP: في التطبيق بتتبعت native عشان تشتغل في الخلفية
+async function httpJson(url, method, body) {
+  if (isNative) {
+    const r = await window.Capacitor.Plugins.CapacitorHttp.request({
+      url, method, headers: { 'Content-Type': 'application/json' }, data: body
+    });
+    if (r.status >= 400) throw new Error('HTTP ' + r.status);
+    return r.data;
+  }
+  const r = await fetch(url, {
+    method, headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined
+  });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return r.json();
+}
+
+function distM(lat1, lng1, lat2, lng2) {
+  const R = 6371000, t = (x) => x * Math.PI / 180;
+  const dLat = t(lat2 - lat1), dLng = t(lng2 - lng1);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(t(lat1)) * Math.cos(t(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+function eventText(ev) {
+  const r = ROLES[ev.role];
+  const female = ev.role === 'mother' || ev.role === 'daughter';
+  return `${r ? r.icon + ' ' : ''}${ev.who} ${female ? 'وصلت' : 'وصل'} ${ev.place}`;
+}
+
+async function notify(text) {
+  toast(text);
+  if (!isNative) return;
+  try {
+    const LN = window.Capacitor.Plugins.LocalNotifications;
+    if (LN) await LN.schedule({ notifications: [{ id: ++notifId, title: 'علتي', body: text, channelId: 'arrivals' }] });
+  } catch (e) {}
+}
+
+// بيشوف لو أنا لسه داخل مكان مهم (ويبعت حدث وصول للباقي)
+async function checkArrival(lat, lng) {
+  if (!myName() || !placesCache.length) return;
+  let state = {};
+  try { state = JSON.parse(localStorage.getItem('elty_inside') || '{}'); } catch (e) {}
+  const arrived = [];
+  placesCache.forEach(pl => {
+    const d = distM(lat, lng, pl.lat, pl.lng), r = pl.radius || 150, was = state[pl.id];
+    if (d <= r) {
+      if (was === false) arrived.push(pl);
+      if (was !== true) state[pl.id] = true;
+    } else if (d > r * 1.3 && was !== false) {
+      state[pl.id] = false;
+    }
+  });
+  localStorage.setItem('elty_inside', JSON.stringify(state));
+  for (const pl of arrived) {
+    try {
+      await httpJson(`${FS}/events?${FSKEY}`, 'POST', { fields: {
+        who: { stringValue: myName() },
+        role: { stringValue: myRole() || '' },
+        place: { stringValue: pl.name },
+        at: { integerValue: String(Date.now()) }
+      } });
+    } catch (e) {}
+  }
+}
+
+// بيجيب الوصولات الجديدة ويطلّع إشعار (كل دقيقة + لما التطبيق يتفتح)
+async function pollEvents() {
+  if (polling || !myName()) return;
+  polling = true;
+  try {
+    let last = Number(localStorage.getItem('elty_last_event')) || 0;
+    if (!last) { last = Date.now(); localStorage.setItem('elty_last_event', String(last)); }
+    const res = await httpJson(`${FS}:runQuery?${FSKEY}`, 'POST', { structuredQuery: {
+      from: [{ collectionId: 'events' }],
+      where: { fieldFilter: { field: { fieldPath: 'at' }, op: 'GREATER_THAN', value: { integerValue: String(last) } } },
+      orderBy: [{ field: { fieldPath: 'at' }, direction: 'ASCENDING' }],
+      limit: 20
+    } });
+    for (const row of (res || [])) {
+      if (!row.document) continue;
+      const f = row.document.fields || {};
+      const ev = { who: fval(f.who), role: fval(f.role), place: fval(f.place), at: fval(f.at) };
+      if (ev.at > last) last = ev.at;
+      if (ev.who && ev.who !== myName()) await notify(eventText(ev));
+    }
+    localStorage.setItem('elty_last_event', String(last));
+  } catch (e) {
+  } finally { polling = false; }
+}
+
+function setPlaces(arr) {
+  placesCache = arr;
+  localStorage.setItem('elty_places', JSON.stringify(arr));
+  renderPlaces();
+}
+
+async function refreshPlacesREST() {
+  if (!myName()) return;
+  try {
+    const res = await httpJson(`${FS}/places?${FSKEY}&pageSize=100`, 'GET');
+    setPlaces((res.documents || []).map(d => {
+      const f = d.fields || {};
+      return { id: d.name.split('/').pop(), name: fval(f.name), lat: fval(f.lat), lng: fval(f.lng), radius: fval(f.radius) || 150 };
+    }));
+  } catch (e) {}
+}
+
+function renderPlaces() {
+  const list = document.getElementById('placesList');
+  if (list) {
+    list.innerHTML = placesCache.length ? '' : '<div class="status">لسه مفيش أماكن. ضيف البيت والشغل والجامعة.</div>';
+    placesCache.forEach(pl => {
+      const row = document.createElement('div');
+      row.className = 'member';
+      row.innerHTML = `<div><div class="member-name">📌 ${esc(pl.name)}</div><div class="member-time">نطاق ${pl.radius} متر</div></div><div class="member-btns"></div>`;
+      const btns = row.querySelector('.member-btns');
+      const go = document.createElement('button');
+      go.className = 'small-btn'; go.textContent = '📍';
+      go.onclick = () => { if (map) { map.setView([pl.lat, pl.lng], 16); document.getElementById('map').scrollIntoView({ behavior: 'smooth', block: 'center' }); } };
+      const del = document.createElement('button');
+      del.className = 'small-btn'; del.textContent = '🗑';
+      del.onclick = () => deletePlace(pl);
+      btns.appendChild(go); btns.appendChild(del);
+      list.appendChild(row);
+    });
+  }
+  if (!map) return;
+  const ids = new Set(placesCache.map(x => x.id));
+  Object.keys(placeLayers).forEach(id => {
+    if (!ids.has(id)) { placeLayers[id].remove(); delete placeLayers[id]; }
+  });
+  placesCache.forEach(pl => {
+    if (placeLayers[pl.id]) {
+      placeLayers[pl.id].setLatLng([pl.lat, pl.lng]);
+      placeLayers[pl.id].setRadius(pl.radius);
+    } else {
+      placeLayers[pl.id] = L.circle([pl.lat, pl.lng], { radius: pl.radius, color: '#7c3aed', weight: 2, fillOpacity: 0.12 })
+        .addTo(map).bindTooltip(pl.name, { permanent: true, direction: 'top', className: 'place-tip' });
+    }
+  });
+}
+
+async function createPlace(lat, lng) {
+  const msg = document.getElementById('placeMsg');
+  const name = (prompt('اسم المكان؟ (مثال: البيت / الشغل / الجامعة)') || '').trim();
+  if (!name) { msg.textContent = ''; return; }
+  let radius = parseInt(prompt('نصف القطر بالمتر؟ (الافتراضي 150)', '150'), 10) || 150;
+  radius = Math.max(50, Math.min(1000, radius));
+  try {
+    await addDoc(collection(db, 'places'), { name, lat, lng, radius, createdBy: myName() });
+    msg.textContent = 'تمت إضافة "' + name + '" ✅';
+  } catch (e) {
+    msg.textContent = 'تعذر الحفظ: ' + (e && e.message ? e.message : e);
+  }
+}
+
+window.addPlaceHere = function() {
+  const msg = document.getElementById('placeMsg');
+  if (!db) { msg.textContent = 'التطبيق لسه مش متصل.'; return; }
+  if (!navigator.geolocation) { msg.textContent = 'الجهاز مش بيدعم تحديد الموقع.'; return; }
+  msg.textContent = 'بنجيب موقعك...';
+  navigator.geolocation.getCurrentPosition(
+    (pos) => createPlace(pos.coords.latitude, pos.coords.longitude),
+    () => { msg.textContent = 'مسموحش بالوصول للموقع.'; },
+    { enableHighAccuracy: true, timeout: 15000 }
+  );
+};
+
+window.addPlaceOnMap = function() {
+  const msg = document.getElementById('placeMsg');
+  if (!db || !map) { msg.textContent = 'الخريطة لسه مش جاهزة.'; return; }
+  pickingPlace = true;
+  msg.textContent = 'دوس على الخريطة في مكان المكان اللي عايزه...';
+  document.getElementById('map').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  map.once('click', (e) => {
+    pickingPlace = false;
+    createPlace(e.latlng.lat, e.latlng.lng);
+  });
+};
+
+async function deletePlace(pl) {
+  if (!confirm('تمسح "' + pl.name + '" لكل العيلة؟')) return;
+  try { await deleteDoc(doc(db, 'places', pl.id)); } catch (e) {
+    document.getElementById('placeMsg').textContent = 'تعذر المسح: ' + (e && e.message ? e.message : e);
+  }
+}
+
+let unsubPlaces = null, unsubEvents = null;
+function listenPlaces() {
+  if (unsubPlaces) unsubPlaces();
+  unsubPlaces = onSnapshot(collection(db, 'places'), (snap) => {
+    const arr = [];
+    snap.forEach(d => {
+      const x = d.data();
+      arr.push({ id: d.id, name: x.name, lat: x.lat, lng: x.lng, radius: x.radius || 150 });
+    });
+    setPlaces(arr);
+  }, (err) => showWarn('خطأ في الأماكن: ' + err.message));
+}
+
+function listenEvents() {
+  if (unsubEvents) unsubEvents();
+  unsubEvents = onSnapshot(query(collection(db, 'events'), orderBy('at', 'desc'), limit(10)), (snap) => {
+    const list = document.getElementById('eventsList');
+    list.innerHTML = snap.empty ? '<div class="status">لسه محدش وصل مكان من الأماكن المحددة.</div>' : '';
+    snap.forEach(d => {
+      const ev = d.data();
+      const row = document.createElement('div');
+      row.className = 'member';
+      row.innerHTML = `<div><div class="member-name">${esc(eventText(ev))}</div><div class="member-time">${fmtTime(ev.at)}</div></div>`;
+      list.appendChild(row);
+    });
+    pollEvents();
+  }, (err) => showWarn('خطأ في الوصولات: ' + err.message));
+}
+
+let bgStarted = false;
+function startBackground() {
+  if (bgStarted) return;
+  bgStarted = true;
+  pollEvents();
+  refreshPlacesREST();
+  setInterval(pollEvents, 60000);
+  setInterval(refreshPlacesREST, 600000);
+}
 
 if (isNative) document.getElementById('bgHint').textContent = 'الموقع بيتحدث تلقائياً حتى لو التطبيق مقفول (لما تتحرك).';
 if (!isNative && /android/i.test(navigator.userAgent)) document.getElementById('apkBtn').style.display = 'block';
