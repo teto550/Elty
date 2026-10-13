@@ -748,12 +748,22 @@ let map = null, markers = {}, placeLayers = {}, fitted = false, pickingPlace = f
 let members = {}, locs = {}, placesCache = [], evCache = [];
 try { placesCache = JSON.parse(localStorage.getItem('elty_places') || '[]'); } catch (e) {}
 
+// مفتاح CARTO المجاني للخريطة (carto.com/basemaps/apikey). لو فاضي بنستخدم خريطة OpenStreetMap العادية.
+const CARTO_KEY = '';
+
 function initMap() {
   if (map || !window.L) return;
   map = L.map('map', { zoomControl: false }).setView([30.0444, 31.2357], 11);
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-    maxZoom: 19, subdomains: 'abcd', attribution: '© OpenStreetMap, © CARTO'
-  }).addTo(map);
+  if (CARTO_KEY) {
+    L.tileLayer('https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png?key=' + encodeURIComponent(CARTO_KEY), {
+      maxZoom: 19, attribution: '© OpenStreetMap, © CARTO'
+    }).addTo(map);
+  } else {
+    // من غير مفتاح CARTO نستخدم خريطة OpenStreetMap العادية عشان ماتظهرش علامة API key required
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19, attribution: '© OpenStreetMap'
+    }).addTo(map);
+  }
   L.control.zoom({ position: 'bottomright' }).addTo(map);
 }
 function fitAll() {
