@@ -294,6 +294,11 @@ a{color:var(--brand);}
     </div>
     <div class="pane" id="pFam"></div>
     <div class="pane hidden" id="pPlaces">
+      <div style="display:flex; gap:8px; margin-bottom:8px;">
+        <input class="input" id="placeQ" type="search" enterkeyhint="search" placeholder="🔍 ابحث عن مكان بالاسم (مثال: جامعة القاهرة)" style="margin:0; flex:1; min-width:0;">
+        <button class="mini" id="placeGo" type="button">بحث</button>
+      </div>
+      <div id="placeResults"></div>
       <div id="placesList"></div>
       <div class="pbtns">
         <button class="mini" id="addHere" type="button">📍 مكاني الحالي</button>
@@ -754,16 +759,23 @@ const CARTO_KEY = 'cb1_4jkh_1_a2252abb440f011bbbbc8365';
 function initMap() {
   if (map || !window.L) return;
   map = L.map('map', { zoomControl: false }).setView([30.0444, 31.2357], 11);
+  const osm = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19, attribution: '© OpenStreetMap'
+  });
   if (CARTO_KEY) {
-    L.tileLayer('https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png?key=' + encodeURIComponent(CARTO_KEY), {
+    const carto = L.tileLayer('https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png?key=' + encodeURIComponent(CARTO_KEY), {
       maxZoom: 19, attribution: '© OpenStreetMap, © CARTO'
     }).addTo(map);
+    // لو مربعات CARTO فشلت كذا مرة ورا بعض نحوّل لخريطة OpenStreetMap تلقائياً
+    let errs = 0;
+    carto.on('tileload', () => { errs = 0; });
+    carto.on('tileerror', () => {
+      if (++errs >= 6 && map.hasLayer(carto)) { map.removeLayer(carto); osm.addTo(map); }
+    });
   } else {
-    // من غير مفتاح CARTO نستخدم خريطة OpenStreetMap العادية عشان ماتظهرش علامة API key required
-    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19, attribution: '© OpenStreetMap'
-    }).addTo(map);
+    osm.addTo(map);
   }
+  window.addEventListener('resize', () => setTimeout(() => map && map.invalidateSize(), 200));
   L.control.zoom({ position: 'bottomright' }).addTo(map);
 }
 function fitAll() {
@@ -947,9 +959,9 @@ $('grab').onclick = () => {
 };
 
 /* =====================  الأماكن المهمة  ===================== */
-async function createPlace(lat, lng) {
+async function createPlace(lat, lng, defName) {
   const msg = $('placeMsg');
-  const name = (prompt('اسم المكان؟ (مثال: البيت / الشغل / الجامعة)') || '').trim().slice(0, 40);
+  const name = (prompt('اسم المكان؟ (مثال: البيت / الشغل / الجامعة)', defName || '') || '').trim().slice(0, 40);
   if (!name) { msg.textContent = ''; return; }
   let radius = parseInt(fixDigits(prompt('نصف القطر بالمتر؟ (الافتراضي 150)', '150') || '150'), 10) || 150;
   radius = Math.max(50, Math.min(1000, radius));
@@ -976,6 +988,55 @@ $('addOnMap').onclick = () => {
   $('sheet').classList.remove('tall');
   map.once('click', (e) => { pickingPlace = false; msg.textContent = ''; createPlace(e.latlng.lat, e.latlng.lng); });
 };
+let searchMarker = null;
+async function searchPlaces() {
+  const q = $('placeQ').value.trim();
+  const box = $('placeResults');
+  if (q.length < 2) { box.innerHTML = ''; return; }
+  box.innerHTML = '<div class="empty">بنبحث...</div>';
+  try {
+    let url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&accept-language=ar&q=' + encodeURIComponent(q);
+    if (map) {
+      const b = map.getBounds();
+      url += `&viewbox=${b.getWest()},${b.getNorth()},${b.getEast()},${b.getSouth()}`;
+    }
+    const r = await fetch(url, { headers: { 'Accept': 'application/json' } });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const arr = await r.json();
+    if (!arr.length) { box.innerHTML = '<div class="empty">مفيش نتايج. جرّب اسم تاني أو \"اختار من الخريطة\".</div>'; return; }
+    box.innerHTML = '';
+    arr.forEach(res => {
+      const parts = String(res.display_name || '').split(',').map(x => x.trim());
+      const title = res.name || parts[0] || q;
+      const sub = parts.slice(1, 4).join('، ');
+      const row = document.createElement('div');
+      row.className = 'row';
+      row.style.cursor = 'pointer';
+      row.innerHTML = `<div class="av" style="--c:#6D3FD1">📍</div><div class="rbody"><div class="rname">${esc(title)}</div><div class="rsub">${esc(sub)}</div></div>`;
+      row.onclick = () => pickSearchResult(res, title);
+      box.appendChild(row);
+    });
+  } catch (e) {
+    box.innerHTML = '<div class="empty">تعذر البحث. اتأكد من النت أو اختار من الخريطة.</div>';
+  }
+}
+async function pickSearchResult(res, title) {
+  const lat = parseFloat(res.lat), lng = parseFloat(res.lon);
+  if (!isFinite(lat) || !isFinite(lng)) return;
+  $('placeResults').innerHTML = '';
+  $('sheet').classList.remove('tall');
+  if (map) {
+    map.setView([lat, lng], 17);
+    if (searchMarker) searchMarker.remove();
+    searchMarker = L.circleMarker([lat, lng], { radius: 9, color: '#6D3FD1', weight: 3, fillOpacity: 0.3 }).addTo(map);
+  }
+  await new Promise(r => setTimeout(r, 350));
+  await createPlace(lat, lng, String(title).slice(0, 40));
+  if (searchMarker) { searchMarker.remove(); searchMarker = null; }
+}
+$('placeGo').onclick = searchPlaces;
+$('placeQ').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); searchPlaces(); } });
+
 async function editPlace(pl) {
   const name = (prompt('اسم المكان؟', pl.name) || '').trim().slice(0, 40);
   if (!name) return;
