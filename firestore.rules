@@ -1,0 +1,62 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // كل بيانات العيلة تحت: families/{هاش الكود السري}/...
+    // مفيش أي صلاحية على families نفسها، فمحدش يقدر يعدّد العيلات ولا يخمّن الكود من قاعدة البيانات.
+    // أي مسار تاني (زي القديم: /locations) مرفوض تلقائياً.
+
+    function validFamily(f) {
+      return f.matches('[0-9a-f]{64}');
+    }
+
+    // مكان كل واحد: families/{family}/locations/{الاسم}
+    match /families/{family}/locations/{person} {
+      allow read: if validFamily(family);
+      allow create, update: if validFamily(family)
+        && person.size() >= 1 && person.size() <= 30
+        && request.resource.data.keys().hasOnly(['lat', 'lng', 'role', 'updatedAt'])
+        && request.resource.data.keys().hasAll(['lat', 'lng', 'role', 'updatedAt'])
+        && request.resource.data.lat is number
+        && request.resource.data.lat >= -90 && request.resource.data.lat <= 90
+        && request.resource.data.lng is number
+        && request.resource.data.lng >= -180 && request.resource.data.lng <= 180
+        && request.resource.data.updatedAt is number
+        && request.resource.data.role is string
+        && request.resource.data.role.size() <= 12;
+      allow delete: if validFamily(family);
+    }
+
+    // الأماكن المهمة: families/{family}/places/{id}
+    match /families/{family}/places/{id} {
+      allow read: if validFamily(family);
+      allow create, update: if validFamily(family)
+        && request.resource.data.keys().hasOnly(['name', 'lat', 'lng', 'radius', 'createdBy'])
+        && request.resource.data.keys().hasAll(['name', 'lat', 'lng', 'radius', 'createdBy'])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() >= 1 && request.resource.data.name.size() <= 40
+        && request.resource.data.lat is number
+        && request.resource.data.lat >= -90 && request.resource.data.lat <= 90
+        && request.resource.data.lng is number
+        && request.resource.data.lng >= -180 && request.resource.data.lng <= 180
+        && request.resource.data.radius is number
+        && request.resource.data.radius >= 50 && request.resource.data.radius <= 1000
+        && request.resource.data.createdBy is string
+        && request.resource.data.createdBy.size() <= 30;
+      allow delete: if validFamily(family);
+    }
+
+    // الوصولات: families/{family}/events/{id} (بتتسجل بس، مفيش تعديل أو مسح)
+    match /families/{family}/events/{id} {
+      allow read: if validFamily(family);
+      allow create: if validFamily(family)
+        && request.resource.data.keys().hasOnly(['who', 'role', 'place', 'at'])
+        && request.resource.data.keys().hasAll(['who', 'role', 'place', 'at'])
+        && request.resource.data.who is string && request.resource.data.who.size() <= 30
+        && request.resource.data.role is string && request.resource.data.role.size() <= 12
+        && request.resource.data.place is string && request.resource.data.place.size() <= 40
+        && request.resource.data.at is number;
+      allow update, delete: if false;
+    }
+  }
+}

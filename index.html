@@ -129,6 +129,9 @@ main{padding:16px; max-width:480px; margin:0 auto;}
   <button id="installBtn" class="install-btn hidden" onclick="doInstall()">⬇️ ثبّت التطبيق على تليفونك</button>
 
   <div id="setupScreen" class="name-setup hidden">
+    <div style="font-size:15px;">كود العيلة السري</div>
+    <input id="codeInput" placeholder="مثال: ab12-cd34-ef56" maxlength="30" autocomplete="off" style="direction:ltr;">
+    <div class="status" style="margin-top:-4px;">الكود ده بيدهولك صاحب التطبيق. سيبه فاضي لو سجّلته قبل كده.</div>
     <div style="font-size:15px;">انت مين في العيلة؟</div>
     <div class="role-grid">
       <button type="button" class="role-btn" data-role="father">👨 أب</button>
@@ -213,9 +216,23 @@ try {
 
 const myName = () => localStorage.getItem('elty_name');
 const myRole = () => localStorage.getItem('elty_role');
+const famId = () => localStorage.getItem('elty_famid');
+const fam = (...path) => ['families', famId(), ...path];
+async function hashCode(code) {
+  const norm = code.trim().toLowerCase().replace(/[\s-]+/g, '');
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('elty:' + norm));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+function dbError(err) {
+  if (err && err.code === 'permission-denied') {
+    showWarn('كود العيلة غلط أو قواعد Firebase مش متظبطة. دوس "تغيير" وادخل الكود الصح.');
+  } else {
+    showWarn('خطأ: ' + (err && err.message ? err.message : err));
+  }
+}
 
 function showScreen() {
-  if (myName() && myRole()) {
+  if (myName() && myRole() && famId()) {
     document.getElementById('setupScreen').classList.add('hidden');
     document.getElementById('appScreen').classList.remove('hidden');
     document.getElementById('meName').textContent = myName();
@@ -243,12 +260,15 @@ document.querySelectorAll('.role-btn').forEach(b => {
 });
 markRole();
 
-window.saveName = function() {
+window.saveName = async function() {
   const v = document.getElementById('nameInput').value.trim();
+  const code = document.getElementById('codeInput').value.trim();
   const msg = document.getElementById('setupMsg');
+  if (!code && !famId()) { msg.textContent = 'اكتب كود العيلة.'; return; }
   if (!pickedRole) { msg.textContent = 'اختار انت مين في العيلة الأول.'; return; }
   if (!v) { msg.textContent = 'اكتب اسمك.'; return; }
   msg.textContent = '';
+  if (code) localStorage.setItem('elty_famid', await hashCode(code));
   localStorage.setItem('elty_name', v);
   localStorage.setItem('elty_role', pickedRole);
   showScreen();
@@ -256,7 +276,7 @@ window.saveName = function() {
 
 window.changeName = function() {
   stopNativeTracking();
-  if (db && myName()) deleteDoc(doc(db, 'locations', myName())).catch(() => {});
+  if (db && myName()) deleteDoc(doc(db, ...fam('locations', myName()))).catch(() => {});
   localStorage.removeItem('elty_name');
   localStorage.removeItem('elty_role');
   localStorage.removeItem('elty_inside');
@@ -276,7 +296,7 @@ let lastNativeWrite = 0;
 // الكتابة بتتم عن طريق HTTP native عشان أندرويد بيقيّد طلبات الـ WebView بعد 5 دقايق في الخلفية
 async function writeLocationNative(lat, lng) {
   const name = encodeURIComponent(myName());
-  const url = `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/(default)/documents/locations/${name}?key=${firebaseConfig.apiKey}`;
+  const url = `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/(default)/documents/families/${famId()}/locations/${name}?key=${firebaseConfig.apiKey}`;
   await window.Capacitor.Plugins.CapacitorHttp.request({
     url,
     method: 'PATCH',
@@ -363,7 +383,7 @@ window.shareLocation = function() {
   statusEl.textContent = 'بنجيب موقعك...';
   navigator.geolocation.getCurrentPosition(async (pos) => {
     try {
-      await setDoc(doc(db, 'locations', myName()), {
+      await setDoc(doc(db, ...fam('locations', myName())), {
         lat: pos.coords.latitude,
         lng: pos.coords.longitude,
         role: myRole() || '',
@@ -494,11 +514,11 @@ function renderMembers() {
 let unsubMembers = null;
 function listenMembers() {
   if (unsubMembers) unsubMembers();
-  unsubMembers = onSnapshot(collection(db, 'locations'), (snap) => {
+  unsubMembers = onSnapshot(collection(db, ...fam('locations')), (snap) => {
     lastDocs = [];
     snap.forEach(d => lastDocs.push({ id: d.id, data: d.data() }));
     renderMembers();
-  }, (err) => showWarn('خطأ في القراءة: ' + err.message));
+  }, dbError);
 }
 setInterval(() => { if (lastDocs.length) renderMembers(); }, 60000);
 
@@ -581,7 +601,7 @@ async function checkArrival(lat, lng) {
   localStorage.setItem('elty_inside', JSON.stringify(state));
   for (const pl of arrived) {
     try {
-      await httpJson(`${FS}/events?${FSKEY}`, 'POST', { fields: {
+      await httpJson(`${FS}/families/${famId()}/events?${FSKEY}`, 'POST', { fields: {
         who: { stringValue: myName() },
         role: { stringValue: myRole() || '' },
         place: { stringValue: pl.name },
@@ -598,7 +618,7 @@ async function pollEvents() {
   try {
     let last = Number(localStorage.getItem('elty_last_event')) || 0;
     if (!last) { last = Date.now(); localStorage.setItem('elty_last_event', String(last)); }
-    const res = await httpJson(`${FS}:runQuery?${FSKEY}`, 'POST', { structuredQuery: {
+    const res = await httpJson(`${FS}/families/${famId()}:runQuery?${FSKEY}`, 'POST', { structuredQuery: {
       from: [{ collectionId: 'events' }],
       where: { fieldFilter: { field: { fieldPath: 'at' }, op: 'GREATER_THAN', value: { integerValue: String(last) } } },
       orderBy: [{ field: { fieldPath: 'at' }, direction: 'ASCENDING' }],
@@ -625,7 +645,7 @@ function setPlaces(arr) {
 async function refreshPlacesREST() {
   if (!myName()) return;
   try {
-    const res = await httpJson(`${FS}/places?${FSKEY}&pageSize=100`, 'GET');
+    const res = await httpJson(`${FS}/families/${famId()}/places?${FSKEY}&pageSize=100`, 'GET');
     setPlaces((res.documents || []).map(d => {
       const f = d.fields || {};
       return { id: d.name.split('/').pop(), name: fval(f.name), lat: fval(f.lat), lng: fval(f.lng), radius: fval(f.radius) || 150 };
@@ -675,7 +695,7 @@ async function createPlace(lat, lng) {
   let radius = parseInt(prompt('نصف القطر بالمتر؟ (الافتراضي 150)', '150'), 10) || 150;
   radius = Math.max(50, Math.min(1000, radius));
   try {
-    await addDoc(collection(db, 'places'), { name, lat, lng, radius, createdBy: myName() });
+    await addDoc(collection(db, ...fam('places')), { name, lat, lng, radius, createdBy: myName() });
     msg.textContent = 'تمت إضافة "' + name + '" ✅';
   } catch (e) {
     msg.textContent = 'تعذر الحفظ: ' + (e && e.message ? e.message : e);
@@ -708,7 +728,7 @@ window.addPlaceOnMap = function() {
 
 async function deletePlace(pl) {
   if (!confirm('تمسح "' + pl.name + '" لكل العيلة؟')) return;
-  try { await deleteDoc(doc(db, 'places', pl.id)); } catch (e) {
+  try { await deleteDoc(doc(db, ...fam('places', pl.id))); } catch (e) {
     document.getElementById('placeMsg').textContent = 'تعذر المسح: ' + (e && e.message ? e.message : e);
   }
 }
@@ -716,19 +736,19 @@ async function deletePlace(pl) {
 let unsubPlaces = null, unsubEvents = null;
 function listenPlaces() {
   if (unsubPlaces) unsubPlaces();
-  unsubPlaces = onSnapshot(collection(db, 'places'), (snap) => {
+  unsubPlaces = onSnapshot(collection(db, ...fam('places')), (snap) => {
     const arr = [];
     snap.forEach(d => {
       const x = d.data();
       arr.push({ id: d.id, name: x.name, lat: x.lat, lng: x.lng, radius: x.radius || 150 });
     });
     setPlaces(arr);
-  }, (err) => showWarn('خطأ في الأماكن: ' + err.message));
+  }, dbError);
 }
 
 function listenEvents() {
   if (unsubEvents) unsubEvents();
-  unsubEvents = onSnapshot(query(collection(db, 'events'), orderBy('at', 'desc'), limit(10)), (snap) => {
+  unsubEvents = onSnapshot(query(collection(db, ...fam('events')), orderBy('at', 'desc'), limit(10)), (snap) => {
     const list = document.getElementById('eventsList');
     list.innerHTML = snap.empty ? '<div class="status">لسه محدش وصل مكان من الأماكن المحددة.</div>' : '';
     snap.forEach(d => {
@@ -739,7 +759,7 @@ function listenEvents() {
       list.appendChild(row);
     });
     pollEvents();
-  }, (err) => showWarn('خطأ في الوصولات: ' + err.message));
+  }, dbError);
 }
 
 let bgStarted = false;
