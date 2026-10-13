@@ -10,182 +10,352 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="علتي">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+Bhaijaan+2:wght@500;700;800&family=IBM+Plex+Sans+Arabic:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
 :root{
-  --bg:#f4f5f7; --card:#ffffff; --text:#1c1c1e; --muted:#6b7280;
-  --accent:#2563eb; --accent2:#16a34a; --border:#e5e7eb;
-  box-sizing:border-box;
-  padding-top:env(safe-area-inset-top,0px);
-  padding-bottom:env(safe-area-inset-bottom,0px);
+  --paper:#F4F7FB; --surface:#FFFFFF; --ink:#14315F; --muted:#66758C; --line:#DCE4EF;
+  --brand:#1D4785; --coral:#E8445A; --amber:#F5A623; --leaf:#3BA55D;
+  --sheet-shadow:0 -6px 24px rgba(20,49,95,.14);
+  --safe-top:env(safe-area-inset-top,0px); --safe-bottom:env(safe-area-inset-bottom,0px);
 }
 @media (prefers-color-scheme: dark){
-  :root:not([data-theme="light"]){
-    --bg:#111214; --card:#1c1d20; --text:#f2f2f2; --muted:#9aa0a6; --border:#2c2d30;
+  :root{
+    --paper:#0E1626; --surface:#172238; --ink:#EAF0FA; --muted:#93A1B8; --line:#26334D;
+    --brand:#8FB4F0; --sheet-shadow:0 -6px 24px rgba(0,0,0,.5);
   }
 }
-html{scroll-padding-top:env(safe-area-inset-top,0px); height:100%;}
-*{box-sizing:border-box;}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+html,body{height:100%; margin:0;}
 body{
-  margin:0; height:100%; background:var(--bg); color:var(--text);
-  font-family:-apple-system,Roboto,"Segoe UI",Tahoma,Arial,sans-serif;
+  background:var(--paper); color:var(--ink); overflow:hidden; font-size:15px;
+  font-family:'IBM Plex Sans Arabic',Roboto,Tahoma,Arial,sans-serif;
 }
-header{
-  position:sticky; top:env(safe-area-inset-top,0px); background:var(--bg);
-  padding:16px 16px 8px; border-bottom:1px solid var(--border);
+h1,h2,h3,.display{font-family:'Baloo Bhaijaan 2','IBM Plex Sans Arabic',Roboto,sans-serif; margin:0;}
+button{font:inherit; color:inherit; cursor:pointer;}
+a{color:var(--brand);}
+.hidden{display:none !important;}
+
+/* ---------- full screens (boot / auth / lock / location) ---------- */
+.screen{
+  position:fixed; inset:0; z-index:2000; overflow-y:auto; background:var(--paper);
+  display:flex; flex-direction:column; align-items:center;
+  padding:calc(var(--safe-top) + 24px) 22px calc(var(--safe-bottom) + 24px);
 }
-h1{font-size:20px; margin:0 0 4px;}
-.sub{color:var(--muted); font-size:13px;}
-main{padding:16px; max-width:480px; margin:0 auto;}
-.card{
-  background:var(--card); border:1px solid var(--border); border-radius:14px;
-  padding:14px 16px; margin-bottom:12px;
+#vLock{z-index:3500;} #vLoc{z-index:4000;}
+.wrap{width:100%; max-width:420px; margin:auto 0;}
+.center{text-align:center;}
+.logo{width:92px; height:92px; border-radius:24px; display:block; margin:0 auto 10px;}
+.auth-title{text-align:center; font-size:32px; font-weight:800; color:var(--brand); line-height:1.2;}
+.auth-sub{text-align:center; color:var(--muted); margin:2px 0 18px;}
+.seg{display:flex; background:var(--line); border-radius:999px; padding:4px; margin-bottom:18px;}
+.seg button{flex:1; border:none; background:transparent; padding:10px; border-radius:999px; font-weight:600; color:var(--muted);}
+.seg button.on{background:var(--surface); color:var(--ink); box-shadow:0 1px 4px rgba(20,49,95,.18);}
+.field{margin-bottom:14px;}
+.field > label{display:block; font-weight:600; margin-bottom:6px; font-size:14px;}
+.input{
+  width:100%; padding:13px 14px; border-radius:14px; border:1.5px solid var(--line);
+  background:var(--surface); color:var(--ink); font:inherit; font-size:16px;
 }
-.me-row{display:flex; align-items:center; justify-content:space-between; gap:8px;}
-.me-name{font-weight:600;}
-.small-btn{
-  background:transparent; border:1px solid var(--border); color:var(--muted);
-  padding:6px 10px; border-radius:8px; font-size:12px;
+.input:focus{outline:none; border-color:var(--brand); box-shadow:0 0 0 3px rgba(29,71,133,.18);}
+.input[readonly]{background:transparent; color:var(--muted);}
+.ltr{direction:ltr; text-align:left;}
+.hint{font-size:12.5px; color:var(--muted); margin-top:6px; line-height:1.7;}
+.err{color:var(--coral); font-size:13.5px; min-height:20px; margin:6px 0 10px; line-height:1.7;}
+.btn{
+  width:100%; padding:14px; border:none; border-radius:999px; font-weight:700; font-size:16px;
+  background:var(--brand); color:#fff; margin-top:4px;
 }
-.share-btn{
-  width:100%; padding:14px; border:none; border-radius:12px; background:var(--accent2);
-  color:#fff; font-size:16px; font-weight:600; margin-top:10px;
+@media (prefers-color-scheme: dark){ .btn{color:#0E1626;} }
+.btn.alt{background:transparent; color:var(--brand); border:1.5px solid var(--line);}
+.btn.warn{background:var(--coral); color:#fff;}
+.btn:disabled{opacity:.55;}
+.link{display:block; margin:14px auto 0; background:none; border:none; color:var(--brand); font-weight:600; padding:6px;}
+.roles{display:grid; grid-template-columns:repeat(4,1fr); gap:8px;}
+.role{
+  padding:10px 2px; border-radius:16px; border:1.5px solid var(--line); background:var(--surface);
+  display:flex; flex-direction:column; align-items:center; gap:2px; font-weight:600; color:var(--ink);
 }
-.install-btn{
-  width:100%; padding:12px; border:none; border-radius:12px; background:var(--accent);
-  color:#fff; font-size:14px; font-weight:600; margin-bottom:12px;
+.role .e{font-size:26px; line-height:1.2;}
+.role.sel{border-color:var(--c); background:var(--c); color:#fff;}
+.spinner{
+  width:34px; height:34px; border-radius:50%; border:4px solid var(--line); border-top-color:var(--brand);
+  animation:spin 1s linear infinite; margin:16px auto;
 }
-.status{font-size:12px; color:var(--muted); margin-top:6px; min-height:16px;}
-.member{
-  display:flex; align-items:center; justify-content:space-between;
-  padding:12px 4px; border-bottom:1px solid var(--border);
+@keyframes spin{to{transform:rotate(360deg);}}
+@media (prefers-reduced-motion: reduce){ .spinner{animation:none;} .sheet{transition:none !important;} }
+.big-ico{font-size:64px; text-align:center; margin-bottom:8px;}
+
+/* ---------- app shell ---------- */
+#app{position:fixed; inset:0; display:flex; flex-direction:column;}
+#mapwrap{position:relative; flex:1; min-height:0;}
+#map{position:absolute; inset:0; direction:ltr; z-index:0;}
+.topbar{position:absolute; top:calc(var(--safe-top) + 10px); left:12px; right:12px; height:48px; z-index:500; pointer-events:none;}
+.topbar > *{pointer-events:auto;}
+.brand{
+  position:absolute; right:0; top:0; height:48px; display:flex; align-items:center; gap:8px;
+  padding:0 14px 0 8px; background:var(--surface); border-radius:999px; box-shadow:0 2px 10px rgba(20,49,95,.2);
 }
-.member:last-child{border-bottom:none;}
-.member-name{font-weight:600;}
-.member-time{font-size:12px; color:var(--muted);}
-.map-link{
-  color:var(--accent); text-decoration:none; font-size:13px; font-weight:600;
-  border:1px solid var(--accent); padding:6px 10px; border-radius:8px;
+.brand img{width:30px; height:30px; border-radius:9px;}
+.brand b{font-family:'Baloo Bhaijaan 2',sans-serif; font-size:20px; color:var(--brand); font-weight:800;}
+.me-btn{
+  position:absolute; left:0; top:0; width:48px; height:48px; border-radius:50%;
+  border:3px solid var(--surface); background:var(--c,#1D4785); font-size:24px; color:#fff;
+  display:flex; align-items:center; justify-content:center; box-shadow:0 2px 10px rgba(20,49,95,.3); padding:0;
 }
-.name-setup{display:flex; flex-direction:column; gap:10px; align-items:center; text-align:center; padding-top:40px;}
-.name-setup input{
-  width:100%; max-width:260px; padding:12px; border-radius:10px; border:1px solid var(--border);
-  background:var(--card); color:var(--text); font-size:16px; text-align:center;
+.fab{
+  position:absolute; left:12px; bottom:14px; z-index:500; width:46px; height:46px; border-radius:50%;
+  background:var(--surface); border:none; box-shadow:0 2px 10px rgba(20,49,95,.25); font-size:20px; padding:0;
 }
-.name-setup button{
-  padding:12px 24px; border:none; border-radius:10px; background:var(--accent);
-  color:#fff; font-size:15px; font-weight:600;
+.sheet{
+  background:var(--surface); border-radius:28px 28px 0 0; box-shadow:var(--sheet-shadow);
+  max-height:46vh; display:flex; flex-direction:column; position:relative; z-index:600;
+  padding-bottom:var(--safe-bottom); transition:max-height .25s ease;
 }
-.role-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px; width:100%; max-width:260px;}
-.name-setup .role-btn{
-  padding:12px 8px; border-radius:10px; border:2px solid var(--border);
-  background:var(--card); color:var(--text); font-size:16px; font-weight:600;
+.sheet.tall{max-height:80vh;}
+.grab{display:block; width:100%; background:none; border:none; padding:10px 0 4px;}
+.grab i{display:block; width:44px; height:5px; border-radius:3px; background:var(--line); margin:0 auto;}
+.tabs{display:flex; gap:6px; padding:4px 14px 10px;}
+.tab{flex:1; padding:9px 4px; border-radius:999px; border:none; background:transparent; color:var(--muted); font-weight:600;}
+.tab.on{background:var(--paper); color:var(--ink);}
+.pane{overflow-y:auto; padding:0 14px 14px; flex:1; min-height:0;}
+.row{display:flex; align-items:center; gap:12px; padding:10px 0; border-bottom:1px solid var(--line);}
+.row:last-child{border-bottom:none;}
+.av{
+  width:46px; height:46px; border-radius:50%; background:var(--c,#1D4785); color:#fff; flex:none;
+  display:flex; align-items:center; justify-content:center; font-size:22px; position:relative;
 }
-.name-setup .role-btn.sel{border-color:var(--accent); background:var(--accent); color:#fff;}
-#map{height:55vh; min-height:320px; border-radius:10px; overflow:hidden; z-index:0; direction:ltr;}
-.leaflet-popup-content{direction:rtl; text-align:right; font-family:inherit; line-height:1.7;}
+.av .dot{position:absolute; bottom:-1px; left:-1px; width:15px; height:15px; border-radius:50%; border:2.5px solid var(--surface); background:var(--muted);}
+.dot.fresh{background:var(--leaf);} .dot.warm{background:var(--amber);}
+.rbody{flex:1; min-width:0;}
+.rname{font-family:'Baloo Bhaijaan 2',sans-serif; font-weight:700; font-size:17px; line-height:1.35;}
+.rsub{font-size:13px; color:var(--muted); line-height:1.6;}
+.ract{display:flex; gap:6px;}
+.ibtn{
+  width:40px; height:40px; border-radius:50%; border:1.5px solid var(--line); background:transparent;
+  display:flex; align-items:center; justify-content:center; font-size:17px; text-decoration:none; padding:0;
+}
+.mini{padding:9px 14px; border-radius:999px; border:1.5px solid var(--line); background:transparent; font-weight:600; font-size:14px;}
+.empty{color:var(--muted); text-align:center; padding:18px 8px; line-height:1.8;}
+.status{font-size:13px; color:var(--muted); min-height:18px; margin-top:8px; line-height:1.6;}
+.pbtns{display:flex; gap:8px; flex-wrap:wrap; margin-top:12px;}
+
+/* map pins */
 .pin-wrap{background:none; border:none;}
-.pin{position:absolute; transform:translate(-50%,-100%); display:flex; flex-direction:column; align-items:center;}
-.pin-label{
-  background:#1d4785; color:#fff; font-size:12px; font-weight:700; padding:3px 8px;
-  border-radius:10px; white-space:nowrap; box-shadow:0 1px 4px rgba(0,0,0,.35);
+.pin{position:absolute; transform:translate(-50%,-100%); display:flex; flex-direction:column; align-items:center; gap:3px;}
+.pin-name{
+  background:var(--c); color:#fff; font-family:'Baloo Bhaijaan 2',sans-serif; font-weight:700; font-size:13px;
+  padding:1px 10px 2px; border-radius:999px; white-space:nowrap; box-shadow:0 1px 5px rgba(0,0,0,.35);
 }
 .pin-dot{
-  margin-top:2px; width:32px; height:32px; border-radius:50%; background:#fff; font-size:20px;
-  display:flex; align-items:center; justify-content:center; border:2px solid #1d4785;
-  box-shadow:0 1px 4px rgba(0,0,0,.35);
+  width:38px; height:38px; border-radius:50%; background:var(--c); display:flex; align-items:center; justify-content:center;
+  font-size:21px; border:3px solid #fff; box-shadow:0 2px 6px rgba(0,0,0,.4);
 }
-.pin.me .pin-label{background:#16a34a;}
-.pin.me .pin-dot{border-color:#16a34a;}
-.member-btns{display:flex; gap:6px; align-items:center;}
+.pin.me .pin-dot{box-shadow:0 0 0 3px var(--c), 0 2px 8px rgba(0,0,0,.4);}
+.pin.stale{filter:grayscale(.7) opacity(.85);}
+.leaflet-popup-content{direction:rtl; text-align:right; font-family:'IBM Plex Sans Arabic',sans-serif; line-height:1.8; margin:12px 14px;}
+.leaflet-popup-content b{font-family:'Baloo Bhaijaan 2',sans-serif; font-size:16px;}
+.place-tip{background:#6D3FD1; color:#fff; border:none; font-weight:700; font-size:12px; box-shadow:none; font-family:'Baloo Bhaijaan 2',sans-serif;}
+.place-tip:before{border-top-color:#6D3FD1 !important;}
+
+/* ---------- profile sheet ---------- */
+.modal{position:fixed; inset:0; z-index:3000; background:rgba(10,20,40,.5); display:flex; align-items:flex-end;}
+.modal-card{
+  background:var(--surface); width:100%; max-height:92vh; overflow-y:auto; border-radius:28px 28px 0 0;
+  padding:18px 18px calc(var(--safe-bottom) + 20px);
+}
+.p-head{display:flex; align-items:center; gap:14px; margin:6px 0 16px;}
+.p-head .av{width:64px; height:64px; font-size:32px;}
+.p-name{font-size:24px; font-weight:800; line-height:1.3;}
+.locked{display:inline-block; font-size:12.5px; color:var(--muted); background:var(--paper); border-radius:999px; padding:2px 10px; margin-top:2px;}
+.p-sec{border-top:1px solid var(--line); padding-top:14px; margin-top:14px;}
+.loc-ok{display:flex; align-items:center; gap:8px; font-weight:600; color:var(--leaf);}
 .toast{
-  position:fixed; bottom:20px; left:50%; transform:translateX(-50%); z-index:9999;
-  background:#1d4785; color:#fff; padding:12px 16px; border-radius:12px; font-size:14px;
-  max-width:90%; text-align:center; box-shadow:0 2px 10px rgba(0,0,0,.35);
+  position:fixed; bottom:calc(var(--safe-bottom) + 24px); left:50%; transform:translateX(-50%); z-index:5000;
+  background:var(--brand); color:#fff; padding:12px 18px; border-radius:16px; font-size:14px; max-width:90%;
+  text-align:center; box-shadow:0 4px 16px rgba(0,0,0,.35); line-height:1.7;
 }
-.place-tip{background:#7c3aed; color:#fff; border:none; font-weight:700; font-size:12px; box-shadow:none;}
-.place-tip:before{border-top-color:#7c3aed !important;}
-.hidden{display:none;}
-.warn{
-  background:#fef3c7; color:#92400e; border-radius:10px; padding:10px 12px; font-size:12px; margin-bottom:12px;
-}
+@media (prefers-color-scheme: dark){ .toast{color:#0E1626;} }
 </style>
 </head>
 <body>
 
-<header>
-  <h1>👪 علتي</h1>
-  <div class="sub">مكان كل واحد في البيت</div>
-</header>
-
-<main>
-  <div id="warnBox" class="warn hidden"></div>
-  <div id="batteryBox" class="warn hidden">
-    لازم تسمح للتطبيق يشتغل في الخلفية من غير قيود توفير الطاقة، وإلا الموبايل هيوقف التتبع.
-    <button class="install-btn" style="margin:8px 0 0" onclick="askBattery()">🔋 اسمح بالعمل في الخلفية</button>
+<!-- boot -->
+<div id="vBoot" class="screen">
+  <div class="wrap center">
+    <img class="logo" src="icon-192.png" alt="">
+    <h1 class="auth-title">عيلتي</h1>
+    <div class="spinner"></div>
+    <div class="auth-sub" id="bootMsg">بنفتح التطبيق...</div>
   </div>
-  <a id="apkBtn" class="install-btn" style="display:none; text-align:center; text-decoration:none;" href="https://github.com/teto550/elty/releases/download/latest/elty.apk">📲 نزّل تطبيق الأندرويد (بيشتغل في الخلفية)</a>
-  <button id="installBtn" class="install-btn hidden" onclick="doInstall()">⬇️ ثبّت التطبيق على تليفونك</button>
+</div>
 
-  <div id="setupScreen" class="name-setup hidden">
-    <div style="font-size:15px;">كود العيلة السري</div>
-    <input id="codeInput" placeholder="مثال: ab12-cd34-ef56" maxlength="30" autocomplete="off" style="direction:ltr;">
-    <div class="status" style="margin-top:-4px;">الكود ده بيدهولك صاحب التطبيق. سيبه فاضي لو سجّلته قبل كده.</div>
-    <div style="font-size:15px;">انت مين في العيلة؟</div>
-    <div class="role-grid">
-      <button type="button" class="role-btn" data-role="father">👨 أب</button>
-      <button type="button" class="role-btn" data-role="mother">👩 أم</button>
-      <button type="button" class="role-btn" data-role="son">👦 ابن</button>
-      <button type="button" class="role-btn" data-role="daughter">👧 ابنة</button>
+<!-- auth -->
+<div id="vAuth" class="screen hidden">
+  <div class="wrap">
+    <img class="logo" src="icon-192.png" alt="">
+    <h1 class="auth-title">عيلتي</h1>
+    <p class="auth-sub" id="authSub">مكان كل واحد في البيت</p>
+
+    <div class="seg" id="seg">
+      <button type="button" data-mode="register" class="on">حساب جديد</button>
+      <button type="button" data-mode="login">دخول</button>
     </div>
-    <div style="font-size:15px;">إيه اسمك؟</div>
-    <input id="nameInput" placeholder="اكتب اسمك" maxlength="20">
-    <button onclick="saveName()">تمام، ابدأ</button>
-    <div class="status" id="setupMsg"></div>
-  </div>
 
-  <div id="appScreen" class="hidden">
-    <div class="card">
-      <div class="me-row">
-        <div>👤 أنا: <span class="me-name" id="meName"></span> <span class="sub" id="meRole"></span></div>
-        <button class="small-btn" onclick="changeName()">تغيير</button>
+    <form id="authForm" novalidate>
+      <div class="field" id="fFamily">
+        <label for="inFamily">كود العيلة السري</label>
+        <input class="input ltr" id="inFamily" maxlength="30" autocomplete="off" placeholder="ab12-cd34-ef56">
+        <div class="hint">لو انت أول واحد في العيلة اكتب كود جديد وادّيه للباقي. لو غيرك سجّل قبلك اكتب نفس الكود بالظبط.</div>
       </div>
-      <button class="share-btn" onclick="shareLocation()">📍 شارك موقعي دلوقتي</button>
-      <div class="status" id="statusMsg"></div>
-      <div class="status" id="bgHint">الموقع بيتحدث طول ما التطبيق مفتوح على الشاشة.</div>
-    </div>
+      <div class="field" id="fRole">
+        <label>انت مين في العيلة؟</label>
+        <div class="roles" id="roles">
+          <button type="button" class="role" data-role="father" style="--c:#1D4785"><span class="e">👨</span>أب</button>
+          <button type="button" class="role" data-role="mother" style="--c:#E8445A"><span class="e">👩</span>أم</button>
+          <button type="button" class="role" data-role="son" style="--c:#F5A623"><span class="e">👦</span>ابن</button>
+          <button type="button" class="role" data-role="daughter" style="--c:#3BA55D"><span class="e">👧</span>ابنة</button>
+        </div>
+        <div class="hint">🔒 الدور والاسم مبيتغيروش بعد التسجيل، فاختارهم صح.</div>
+      </div>
+      <div class="field" id="fName">
+        <label for="inName">الاسم</label>
+        <input class="input" id="inName" maxlength="20" autocomplete="name" placeholder="مثال: يوسف">
+      </div>
+      <div class="field" id="fPhone">
+        <label for="inPhone">رقم التليفون</label>
+        <input class="input ltr" id="inPhone" type="tel" inputmode="tel" maxlength="16" autocomplete="tel" placeholder="01012345678">
+      </div>
+      <div class="field" id="fEmail">
+        <label for="inEmail">الإيميل</label>
+        <input class="input ltr" id="inEmail" type="email" autocomplete="email" placeholder="name@gmail.com">
+      </div>
+      <div class="field" id="fPass">
+        <label for="inPass">الباسورد</label>
+        <input class="input ltr" id="inPass" type="password" autocomplete="current-password">
+        <div class="hint" id="passHint">٨ حروف أو أرقام على الأقل.</div>
+      </div>
+      <div class="err" id="authErr"></div>
+      <button class="btn" id="authSubmit" type="submit">إنشاء الحساب</button>
+    </form>
 
-    <div class="card" style="padding:8px;">
-      <div id="map"></div>
-      <button class="small-btn" style="margin-top:8px;" onclick="fitAll()">🎯 اعرض الكل</button>
-    </div>
+    <button class="btn alt hidden" id="bioLoginBtn" type="button" style="margin-top:12px;">🔐 دخول بالبصمة</button>
+    <button class="link hidden" id="forgotBtn" type="button">نسيت الباسورد؟</button>
+    <a class="link hidden" id="apkLink" href="https://github.com/teto550/Elty/releases/download/latest/elty.apk">📲 نزّل تطبيق الأندرويد (بيشتغل في الخلفية)</a>
+  </div>
+</div>
 
-    <div class="card">
-      <div style="font-weight:600; margin-bottom:6px;">أماكن العيلة</div>
-      <div id="membersList"><div class="status">بنجيب البيانات...</div></div>
+<!-- fingerprint lock -->
+<div id="vLock" class="screen hidden">
+  <div class="wrap center">
+    <div class="big-ico">🔐</div>
+    <h2 style="font-size:26px; font-weight:800;">التطبيق مقفول</h2>
+    <p class="auth-sub">افتحه بالبصمة. التتبع شغال في الخلفية زي ما هو.</p>
+    <button class="btn" id="unlockBio" type="button">افتح بالبصمة</button>
+    <button class="link" id="showPassUnlock" type="button">استخدم الباسورد بدل البصمة</button>
+    <div id="passUnlock" class="hidden" style="margin-top:8px;">
+      <input class="input ltr" id="unlockPass" type="password" placeholder="الباسورد" autocomplete="current-password">
+      <button class="btn alt" id="unlockPassBtn" type="button" style="margin-top:10px;">دخول</button>
     </div>
+    <div class="err center" id="lockErr"></div>
+  </div>
+</div>
 
-    <div class="card">
-      <div style="font-weight:600; margin-bottom:6px;">📌 الأماكن المهمة (بيت / شغل / جامعة)</div>
+<!-- location required -->
+<div id="vLoc" class="screen hidden">
+  <div class="wrap center">
+    <div class="big-ico">📍</div>
+    <h2 style="font-size:26px; font-weight:800;">لازم الموقع يفضل شغال</h2>
+    <p class="auth-sub" id="locMsg">عيلتك مش هتشوفك لو الموقع مقفول، والتطبيق مش هيشتغل من غيره.</p>
+    <button class="btn warn" id="locSettings" type="button">فتح الإعدادات وتشغيل الموقع</button>
+    <button class="btn alt" id="locRetry" type="button" style="margin-top:10px;">شغّلته، جرّب تاني</button>
+  </div>
+</div>
+
+<!-- main app -->
+<div id="app" class="hidden">
+  <div id="mapwrap">
+    <div id="map"></div>
+    <div class="topbar">
+      <div class="brand"><img src="icon-192.png" alt=""><b>عيلتي</b></div>
+      <button class="me-btn" id="meBtn" type="button" aria-label="ملفي"></button>
+    </div>
+    <button class="fab" id="fitBtn" type="button" aria-label="اعرض الكل">🎯</button>
+  </div>
+  <section class="sheet" id="sheet">
+    <button class="grab" id="grab" type="button" aria-label="توسيع"><i></i></button>
+    <div class="tabs" id="tabs">
+      <button type="button" class="tab on" data-tab="pFam">العيلة</button>
+      <button type="button" class="tab" data-tab="pPlaces">الأماكن</button>
+      <button type="button" class="tab" data-tab="pEvents">الوصولات</button>
+    </div>
+    <div class="pane" id="pFam"></div>
+    <div class="pane hidden" id="pPlaces">
       <div id="placesList"></div>
-      <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">
-        <button class="small-btn" onclick="addPlaceHere()">📍 مكاني الحالي</button>
-        <button class="small-btn" onclick="addPlaceOnMap()">🗺️ اختار من الخريطة</button>
+      <div class="pbtns">
+        <button class="mini" id="addHere" type="button">📍 مكاني الحالي</button>
+        <button class="mini" id="addOnMap" type="button">🗺️ اختار من الخريطة</button>
       </div>
       <div class="status" id="placeMsg"></div>
     </div>
+    <div class="pane hidden" id="pEvents"></div>
+  </section>
+</div>
 
-    <div class="card">
-      <div style="font-weight:600; margin-bottom:6px;">🔔 آخر الوصولات</div>
-      <div id="eventsList"><div class="status">بنجيب البيانات...</div></div>
+<!-- profile -->
+<div id="vProfile" class="modal hidden">
+  <div class="modal-card">
+    <div class="p-head">
+      <div class="av" id="pAv"></div>
+      <div>
+        <h2 class="p-name" id="pName"></h2>
+        <span class="locked" id="pRole"></span>
+      </div>
     </div>
+    <div class="field"><label>الإيميل</label><input class="input ltr" id="pEmail" readonly></div>
+    <div class="field">
+      <label for="pPhone">رقم التليفون</label>
+      <input class="input ltr" id="pPhone" type="tel" inputmode="tel" maxlength="16">
+    </div>
+    <button class="btn" id="pSave" type="button">حفظ رقم التليفون</button>
+    <div class="err" id="pErr"></div>
+
+    <div class="p-sec">
+      <div class="loc-ok" id="pLoc">📍 الموقع شغال</div>
+      <div class="hint">الموقع بيتبعت تلقائياً للعيلة ومينفعش يتقفل. لو اتقفل التطبيق بيقفل نفسه والعيلة بتتنبه.</div>
+      <button class="mini" id="pShare" type="button" style="margin-top:10px;">📍 حدّث موقعي دلوقتي</button>
+    </div>
+
+    <div class="p-sec" id="pBioSec">
+      <div style="font-weight:600;">الدخول بالبصمة</div>
+      <div class="hint" id="pBioState"></div>
+      <button class="mini" id="pBio" type="button" style="margin-top:8px;"></button>
+    </div>
+
+    <div class="p-sec">
+      <button class="mini" id="pReset" type="button">🔑 ابعتلي رابط تغيير الباسورد</button>
+    </div>
+    <button class="btn alt" id="pClose" type="button" style="margin-top:18px;">قفل</button>
   </div>
-</main>
+</div>
+
 <div id="toast" class="toast hidden"></div>
 
+<script>
+// لو الوحدة الرئيسية ماشتغلتش (نت ضعيف أو مكتبة ماتحملتش) نوضّح للمستخدم
+setTimeout(function(){
+  if (!window.__eltyReady) {
+    var m = document.getElementById('bootMsg');
+    if (m) m.textContent = 'تعذر التحميل. اتأكد من النت وافتح التطبيق تاني.';
+  }
+}, 15000);
+</script>
+
 <script type="module">
-// ⚙️ بيانات مشروع Firebase بتاعك
+// ⚙️ بيانات مشروع Firebase
 const firebaseConfig = {
   apiKey: "AIzaSyBiSgk74sDCw9ey1b45MVQinqo_QxJ4Ta0",
   authDomain: "elty-fc7d6.firebaseapp.com",
@@ -197,140 +367,709 @@ const firebaseConfig = {
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
-  getFirestore, doc, setDoc, addDoc, deleteDoc, onSnapshot, collection, query, orderBy, limit
+  getFirestore, doc, setDoc, getDoc, getDocs, addDoc, updateDoc, deleteDoc,
+  onSnapshot, collection, query, orderBy, limit
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import {
+  getAuth, onAuthStateChanged, onIdTokenChanged, createUserWithEmailAndPassword,
+  signInWithEmailAndPassword, sendPasswordResetEmail, reauthenticateWithCredential, EmailAuthProvider
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
-function showWarn(msg) {
-  const w = document.getElementById('warnBox');
-  w.textContent = '⚠️ ' + msg;
-  w.classList.remove('hidden');
+window.__eltyReady = true;
+
+/* =====================  أدوات عامة  ===================== */
+const $ = (id) => document.getElementById(id);
+const KEY = firebaseConfig.apiKey;
+const FSROOT = `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/(default)/documents`;
+const isNative = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+
+const ROLES = {
+  father:   { label: 'أب',   icon: '👨', color: '#1D4785' },
+  mother:   { label: 'أم',   icon: '👩', color: '#E8445A' },
+  son:      { label: 'ابن',  icon: '👦', color: '#F5A623' },
+  daughter: { label: 'ابنة', icon: '👧', color: '#3BA55D' }
+};
+const isFemale = (role) => role === 'mother' || role === 'daughter';
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+const fixDigits = (s) => String(s).replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d));
+const fval = (f) => !f ? undefined
+  : ('stringValue' in f) ? f.stringValue
+  : ('doubleValue' in f) ? f.doubleValue
+  : ('integerValue' in f) ? Number(f.integerValue) : undefined;
+
+function toast(msg, ms) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.remove('hidden');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => t.classList.add('hidden'), ms || 7000);
 }
 
-let db = null;
-try {
-  const app = initializeApp(firebaseConfig);
-  db = getFirestore(app);
-} catch (e) {
-  showWarn('فشل تحميل Firebase: ' + (e && e.message ? e.message : e));
+function fmtTime(ts) {
+  if (!ts) return '—';
+  const d = new Date(ts), now = new Date();
+  const t = d.toLocaleTimeString('ar-EG', { hour: 'numeric', minute: '2-digit' });
+  const day = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diff = Math.round((day(now) - day(d)) / 86400000);
+  if (diff === 0) return 'النهاردة ' + t;
+  if (diff === 1) return 'امبارح ' + t;
+  return d.toLocaleDateString('ar-EG', { day: 'numeric', month: 'long' }) + ' ' + t;
 }
-
-const myName = () => localStorage.getItem('elty_name');
-const myRole = () => localStorage.getItem('elty_role');
-const famId = () => localStorage.getItem('elty_famid');
-const fam = (...path) => ['families', famId(), ...path];
+function timeAgo(ts) {
+  if (!ts) return '';
+  const m = Math.round((Date.now() - ts) / 60000);
+  if (m < 1) return 'دلوقتي';
+  if (m < 60) return `من ${m} دقيقة`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `من ${h} ساعة`;
+  return `من ${Math.round(h / 24)} يوم`;
+}
+function distM(lat1, lng1, lat2, lng2) {
+  const R = 6371000, t = (x) => x * Math.PI / 180;
+  const dLat = t(lat2 - lat1), dLng = t(lng2 - lng1);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(t(lat1)) * Math.cos(t(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
 async function hashCode(code) {
   const norm = code.trim().toLowerCase().replace(/[\s-]+/g, '');
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('elty:' + norm));
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
-function dbError(err) {
-  if (err && err.code === 'permission-denied') {
-    showWarn('كود العيلة غلط أو قواعد Firebase مش متظبطة. دوس "تغيير" وادخل الكود الصح.');
-  } else {
-    showWarn('خطأ: ' + (err && err.message ? err.message : err));
-  }
+
+/* =====================  Firebase  ===================== */
+let app = null, db = null, auth = null;
+try {
+  app = initializeApp(firebaseConfig);
+  db = getFirestore(app);
+  auth = getAuth(app);
+} catch (e) {
+  $('bootMsg').textContent = 'فشل تحميل Firebase: ' + (e && e.message ? e.message : e);
 }
 
-function showScreen() {
-  if (myName() && myRole() && famId()) {
-    document.getElementById('setupScreen').classList.add('hidden');
-    document.getElementById('appScreen').classList.remove('hidden');
-    document.getElementById('meName').textContent = myName();
-    const r = ROLES[myRole()];
-    document.getElementById('meRole').textContent = r ? '(' + r.label + ')' : '';
-    initMap();
-    renderPlaces();
-    if (map) setTimeout(() => map.invalidateSize(), 0);
-    if (db) { listenMembers(); listenPlaces(); listenEvents(); }
-    startBackground();
-    startNativeTracking();
-  } else {
-    document.getElementById('setupScreen').classList.remove('hidden');
-    document.getElementById('appScreen').classList.add('hidden');
-    if (myName()) document.getElementById('nameInput').value = myName();
-  }
+const famId = () => localStorage.getItem('elty_famid');
+const fcol = (n) => collection(db, 'families', famId(), n);
+const fdoc = (n, id) => doc(db, 'families', famId(), n, id);
+const famFS = () => `${FSROOT}/families/${famId()}`;
+
+function errText(e) {
+  const c = (e && (e.code || e.message)) || '';
+  if (c === 'NAME_TAKEN') return 'الاسم ده مستخدم عند حد تاني في العيلة. اكتب اسم تاني (مثلاً اسمك الأول والتاني).';
+  if (c.includes('email-already-in-use')) return 'الإيميل ده مسجل قبل كده. دوس "دخول" بدل "حساب جديد".';
+  if (c.includes('invalid-email')) return 'الإيميل مكتوب غلط.';
+  if (c.includes('weak-password')) return 'الباسورد ضعيف. اكتب ٨ حروف أو أرقام على الأقل.';
+  if (c.includes('invalid-credential') || c.includes('wrong-password') || c.includes('user-not-found')) return 'الإيميل أو الباسورد غلط.';
+  if (c.includes('too-many-requests')) return 'محاولات كتير. استنى شوية وجرّب تاني.';
+  if (c.includes('network')) return 'مفيش نت. اتأكد من الاتصال وجرّب تاني.';
+  if (c.includes('operation-not-allowed')) return 'الدخول بالإيميل مش متفعّل في Firebase. فعّله من Authentication ← Sign-in method.';
+  if (c.includes('permission-denied')) return 'مفيش صلاحية. اتأكد من كود العيلة وإن قواعد Firebase متظبطة.';
+  return 'حصل خطأ: ' + (e && e.message ? e.message : e);
 }
 
-let pickedRole = myRole();
-function markRole() {
-  document.querySelectorAll('.role-btn').forEach(b => b.classList.toggle('sel', b.dataset.role === pickedRole));
+/* =====================  الشاشات  ===================== */
+function showView(name) {
+  $('vBoot').classList.toggle('hidden', name !== 'boot');
+  $('vAuth').classList.toggle('hidden', name !== 'auth');
+  $('vLock').classList.toggle('hidden', name !== 'lock');
+  $('app').classList.toggle('hidden', name !== 'app');
+  if (name === 'app' && map) setTimeout(() => map.invalidateSize(), 50);
 }
-document.querySelectorAll('.role-btn').forEach(b => {
-  b.onclick = () => { pickedRole = b.dataset.role; markRole(); };
+
+/* =====================  البصمة (تطبيق الأندرويد فقط)  ===================== */
+const BIO_SERVER = 'elty.app';
+let bioPlugin = null;
+const NB = () => bioPlugin || (bioPlugin = window.Capacitor.registerPlugin('NativeBiometric'));
+const bioOn = () => localStorage.getItem('elty_bio') === '1';
+async function bioAvailable() {
+  if (!isNative) return false;
+  try { return !!(await NB().isAvailable({ useFallback: false })).isAvailable; } catch (e) { return false; }
+}
+async function bioVerify(reason) {
+  await NB().verifyIdentity({
+    reason, title: 'علتي', subtitle: 'اثبت إنك انت', negativeButtonText: 'إلغاء', useFallback: false, maxAttempts: 3
+  });
+}
+async function bioEnable(email, pass) {
+  await bioVerify('تفعيل الدخول بالبصمة');
+  await NB().setCredentials({ username: email, password: pass, server: BIO_SERVER });
+  localStorage.setItem('elty_bio', '1');
+}
+async function bioDisable() {
+  try { await NB().deleteCredentials({ server: BIO_SERVER }); } catch (e) {}
+  localStorage.removeItem('elty_bio');
+}
+async function offerBiometric(email, pass) {
+  if (bioOn() || !(await bioAvailable())) return;
+  if (!confirm('تفعّل الدخول بالبصمة؟')) return;
+  try { await bioEnable(email, pass); toast('البصمة اتفعّلت ✅'); } catch (e) { toast('تعذر تفعيل البصمة.'); }
+}
+
+/* =====================  التسجيل والدخول  ===================== */
+let authMode = 'register';   // register | login | complete
+let pickedRole = null;
+let registering = false;
+let me = null;               // { uid, email, name, role, phone }
+let appStarted = false;
+
+function setAuthMode(m) {
+  authMode = m;
+  const reg = m === 'register', login = m === 'login', comp = m === 'complete';
+  document.querySelectorAll('#seg button').forEach(b => b.classList.toggle('on', b.dataset.mode === m));
+  $('seg').classList.toggle('hidden', comp);
+  $('fFamily').classList.toggle('hidden', login);
+  $('fRole').classList.toggle('hidden', login);
+  $('fName').classList.toggle('hidden', login);
+  $('fPhone').classList.toggle('hidden', login);
+  $('fEmail').classList.toggle('hidden', comp);
+  $('fPass').classList.toggle('hidden', comp);
+  $('passHint').classList.toggle('hidden', !reg);
+  $('inPass').autocomplete = reg ? 'new-password' : 'current-password';
+  $('authSubmit').textContent = reg ? 'إنشاء الحساب' : login ? 'دخول' : 'إكمال التسجيل';
+  $('authSub').textContent = comp ? 'باقي خطوة واحدة عشان تكمل التسجيل' : 'مكان كل واحد في البيت';
+  $('forgotBtn').classList.toggle('hidden', !login);
+  $('apkLink').classList.toggle('hidden', isNative || !/android/i.test(navigator.userAgent));
+  refreshBioLoginBtn();
+  $('authErr').textContent = '';
+}
+async function refreshBioLoginBtn() {
+  const show = authMode === 'login' && isNative && bioOn() && await bioAvailable();
+  $('bioLoginBtn').classList.toggle('hidden', !show);
+}
+document.querySelectorAll('#seg button').forEach(b => b.onclick = () => setAuthMode(b.dataset.mode));
+document.querySelectorAll('#roles .role').forEach(b => b.onclick = () => {
+  pickedRole = b.dataset.role;
+  document.querySelectorAll('#roles .role').forEach(x => x.classList.toggle('sel', x === b));
 });
-markRole();
+$('authForm').addEventListener('submit', (e) => { e.preventDefault(); submitAuth(); });
 
-window.saveName = async function() {
-  const v = document.getElementById('nameInput').value.trim();
-  const code = document.getElementById('codeInput').value.trim();
-  const msg = document.getElementById('setupMsg');
-  if (!code && !famId()) { msg.textContent = 'اكتب كود العيلة.'; return; }
-  if (!pickedRole) { msg.textContent = 'اختار انت مين في العيلة الأول.'; return; }
-  if (!v) { msg.textContent = 'اكتب اسمك.'; return; }
-  msg.textContent = '';
-  if (code) localStorage.setItem('elty_famid', await hashCode(code));
-  localStorage.setItem('elty_name', v);
-  localStorage.setItem('elty_role', pickedRole);
-  showScreen();
+function readProfileFields() {
+  const name = $('inName').value.trim();
+  const phone = fixDigits($('inPhone').value).replace(/[\s-]/g, '');
+  const code = $('inFamily').value.trim();
+  if (!/^[\p{L}\p{N}_-]{8,30}$/u.test(code.replace(/\s+/g, ''))) return { err: 'كود العيلة لازم يكون ٨ حروف أو أرقام على الأقل (من غير مسافات).' };
+  if (!pickedRole) return { err: 'اختار انت مين في العيلة.' };
+  if (name.length < 2 || name.length > 20) return { err: 'اكتب اسمك (من حرفين لـ ٢٠ حرف).' };
+  if (!/^\+?\d{8,15}$/.test(phone)) return { err: 'رقم التليفون غلط. اكتبه أرقام بس (مثال: 01012345678).' };
+  return { name, phone, code };
+}
+
+async function createProfile(user, f) {
+  const fid = await hashCode(f.code);
+  const snap = await getDocs(collection(db, 'families', fid, 'members'));
+  const taken = snap.docs.some(d => String(d.data().name || '').trim().toLowerCase() === f.name.toLowerCase());
+  if (taken) throw new Error('NAME_TAKEN');
+  await setDoc(doc(db, 'users', user.uid), { fam: fid });
+  await setDoc(doc(db, 'families', fid, 'members', user.uid), {
+    name: f.name, role: pickedRole, phone: f.phone, email: user.email, createdAt: Date.now()
+  });
+  localStorage.setItem('elty_famid', fid);
+  return snap.size;
+}
+
+async function submitAuth() {
+  const err = $('authErr'), btn = $('authSubmit');
+  err.textContent = '';
+  const email = $('inEmail').value.trim(), pass = $('inPass').value;
+  btn.disabled = true;
+  try {
+    if (authMode === 'login') {
+      if (!email || !pass) { err.textContent = 'اكتب الإيميل والباسورد.'; return; }
+      registering = true;
+      const cred = await signInWithEmailAndPassword(auth, email, pass);
+      localStorage.removeItem('elty_famid');
+      await bootUser(cred.user, { pass });
+    } else if (authMode === 'register') {
+      const f = readProfileFields();
+      if (f.err) { err.textContent = f.err; return; }
+      if (!/^\S+@\S+\.\S+$/.test(email)) { err.textContent = 'اكتب إيميل صحيح.'; return; }
+      if (pass.length < 8) { err.textContent = 'الباسورد لازم يكون ٨ حروف أو أرقام على الأقل.'; return; }
+      registering = true;
+      const cred = await createUserWithEmailAndPassword(auth, email, pass);
+      let count;
+      try {
+        count = await createProfile(cred.user, f);
+      } catch (e) {
+        try { await cred.user.delete(); } catch (_) {}
+        localStorage.removeItem('elty_famid');
+        throw e;
+      }
+      await bootUser(cred.user, { pass, welcomeCount: count });
+    } else {
+      const f = readProfileFields();
+      if (f.err) { err.textContent = f.err; return; }
+      registering = true;
+      const count = await createProfile(auth.currentUser, f);
+      await bootUser(auth.currentUser, { welcomeCount: count });
+    }
+  } catch (e) {
+    err.textContent = errText(e);
+  } finally {
+    registering = false;
+    btn.disabled = false;
+  }
+}
+
+$('forgotBtn').onclick = async () => {
+  const email = $('inEmail').value.trim();
+  if (!/^\S+@\S+\.\S+$/.test(email)) { $('authErr').textContent = 'اكتب الإيميل فوق الأول.'; return; }
+  try { await sendPasswordResetEmail(auth, email); toast('بعتنا رابط تغيير الباسورد على الإيميل.'); }
+  catch (e) { $('authErr').textContent = errText(e); }
 };
 
-window.changeName = function() {
-  stopNativeTracking();
-  if (db && myName()) deleteDoc(doc(db, ...fam('locations', myName()))).catch(() => {});
-  localStorage.removeItem('elty_name');
-  localStorage.removeItem('elty_role');
-  localStorage.removeItem('elty_inside');
-  localStorage.removeItem('elty_last_event');
-  pickedRole = null;
-  markRole();
-  document.getElementById('nameInput').value = '';
-  showScreen();
+$('bioLoginBtn').onclick = async () => {
+  try {
+    await bioVerify('الدخول بالبصمة');
+    const c = await NB().getCredentials({ server: BIO_SERVER });
+    registering = true;
+    const cred = await signInWithEmailAndPassword(auth, c.username, c.password);
+    localStorage.removeItem('elty_famid');
+    await bootUser(cred.user, {});
+  } catch (e) {
+    $('authErr').textContent = 'تعذر الدخول بالبصمة. ادخل بالباسورد.';
+  } finally { registering = false; }
 };
 
-// ---- التتبع في الخلفية (نسخة تطبيق الأندرويد فقط) ----
-const isNative = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
-let bgPlugin = null;
-let watcherId = null;
-let lastNativeWrite = 0;
+async function bootUser(user, opts) {
+  opts = opts || {};
+  try {
+    if (!famId()) {
+      const u = await getDoc(doc(db, 'users', user.uid));
+      if (u.exists()) localStorage.setItem('elty_famid', u.data().fam);
+    }
+    if (!famId()) { setAuthMode('complete'); showView('auth'); return; }
+    const p = await getDoc(fdoc('members', user.uid));
+    if (!p.exists()) { setAuthMode('complete'); showView('auth'); return; }
+    me = Object.assign({ uid: user.uid, email: user.email }, p.data());
+    if (opts.pass) await offerBiometric(user.email, opts.pass);
+    if (opts.welcomeCount !== undefined) {
+      toast(opts.welcomeCount === 0 ? 'اتعملت عيلة جديدة بالكود ده. ادّي الكود لباقي العيلة.' : `انضميت لعيلة فيها ${opts.welcomeCount} من أفرادها ✅`, 9000);
+    }
+    if (isNative && bioOn() && !opts.pass && opts.welcomeCount === undefined) { showLock(); return; }
+    enterApp();
+  } catch (e) {
+    setAuthMode(authMode === 'complete' ? 'complete' : 'login');
+    showView('auth');
+    $('authErr').textContent = errText(e);
+  }
+}
 
-// الكتابة بتتم عن طريق HTTP native عشان أندرويد بيقيّد طلبات الـ WebView بعد 5 دقايق في الخلفية
-async function writeLocationNative(lat, lng) {
-  const name = encodeURIComponent(myName());
-  const url = `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/(default)/documents/families/${famId()}/locations/${name}?key=${firebaseConfig.apiKey}`;
-  await window.Capacitor.Plugins.CapacitorHttp.request({
-    url,
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    data: { fields: {
-      lat: { doubleValue: lat },
-      lng: { doubleValue: lng },
-      role: { stringValue: myRole() || '' },
-      updatedAt: { integerValue: String(Date.now()) }
-    } }
+if (auth) {
+  onAuthStateChanged(auth, (user) => {
+    if (registering) return;
+    if (user) bootUser(user, {});
+    else { setAuthMode(localStorage.getItem('elty_had_account') ? 'login' : 'register'); showView('auth'); }
+  });
+  onIdTokenChanged(auth, async (user) => {
+    if (!user) return;
+    try {
+      const r = await user.getIdTokenResult();
+      localStorage.setItem('elty_idtoken', r.token);
+      localStorage.setItem('elty_idexp', String(new Date(r.expirationTime).getTime()));
+      localStorage.setItem('elty_refresh', user.refreshToken);
+      localStorage.setItem('elty_had_account', '1');
+    } catch (e) {}
   });
 }
 
-let batteryPlugin = null;
-async function checkBattery() {
-  if (!isNative) return;
-  try {
-    if (!batteryPlugin) batteryPlugin = window.Capacitor.registerPlugin('ElityBattery');
-    const r = await batteryPlugin.isIgnoring();
-    document.getElementById('batteryBox').classList.toggle('hidden', !!r.value);
-  } catch (e) {}
+/* ----- شاشة القفل بالبصمة ----- */
+let hiddenAt = 0;
+function showLock() {
+  $('lockErr').textContent = '';
+  $('passUnlock').classList.add('hidden');
+  showView('lock');
+  $('vLock').classList.remove('hidden');
+  unlockBio();
 }
-window.askBattery = async function() {
+function unlocked() {
+  $('vLock').classList.add('hidden');
+  if (appStarted) showView('app'); else enterApp();
+}
+async function unlockBio() {
+  try { await bioVerify('افتح علتي'); unlocked(); }
+  catch (e) { $('lockErr').textContent = 'تعذر التحقق. جرّب تاني أو استخدم الباسورد.'; }
+}
+$('unlockBio').onclick = unlockBio;
+$('showPassUnlock').onclick = () => $('passUnlock').classList.remove('hidden');
+$('unlockPassBtn').onclick = async () => {
   try {
-    if (!batteryPlugin) batteryPlugin = window.Capacitor.registerPlugin('ElityBattery');
-    await batteryPlugin.request();
-  } catch (e) {}
+    await reauthenticateWithCredential(auth.currentUser, EmailAuthProvider.credential(me.email, $('unlockPass').value));
+    $('unlockPass').value = '';
+    unlocked();
+  } catch (e) { $('lockErr').textContent = 'الباسورد غلط.'; }
 };
 
+/* =====================  التوكن للطلبات في الخلفية  ===================== */
+async function authToken() {
+  if (!isNative && auth.currentUser) return auth.currentUser.getIdToken();
+  const tok = localStorage.getItem('elty_idtoken');
+  const exp = Number(localStorage.getItem('elty_idexp') || 0);
+  if (tok && exp - Date.now() > 120000) return tok;
+  const rt = localStorage.getItem('elty_refresh');
+  if (!rt) throw new Error('no-token');
+  const r = await window.Capacitor.Plugins.CapacitorHttp.request({
+    url: `https://securetoken.googleapis.com/v1/token?key=${KEY}`,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    data: { grant_type: 'refresh_token', refresh_token: rt }
+  });
+  if (r.status >= 400 || !r.data || !r.data.id_token) throw new Error('token-refresh-failed');
+  localStorage.setItem('elty_idtoken', r.data.id_token);
+  localStorage.setItem('elty_refresh', r.data.refresh_token || rt);
+  localStorage.setItem('elty_idexp', String(Date.now() + Number(r.data.expires_in || 3600) * 1000));
+  return r.data.id_token;
+}
+
+async function httpJson(url, method, body) {
+  const token = await authToken();
+  const headers = { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token };
+  if (isNative) {
+    const r = await window.Capacitor.Plugins.CapacitorHttp.request({ url, method, headers, data: body });
+    if (r.status >= 400) throw new Error('HTTP ' + r.status);
+    return r.data;
+  }
+  const r = await fetch(url, { method, headers, body: body ? JSON.stringify(body) : undefined });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return r.json();
+}
+
+/* =====================  الخريطة  ===================== */
+let map = null, markers = {}, placeLayers = {}, fitted = false, pickingPlace = false;
+let members = {}, locs = {}, placesCache = [], evCache = [];
+try { placesCache = JSON.parse(localStorage.getItem('elty_places') || '[]'); } catch (e) {}
+
+function initMap() {
+  if (map || !window.L) return;
+  map = L.map('map', { zoomControl: false }).setView([30.0444, 31.2357], 11);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+    maxZoom: 19, subdomains: 'abcd', attribution: '© OpenStreetMap, © CARTO'
+  }).addTo(map);
+  L.control.zoom({ position: 'bottomright' }).addTo(map);
+}
+function fitAll() {
+  if (!map) return;
+  const pts = Object.values(markers).map(m => m.getLatLng());
+  if (!pts.length) return;
+  if (pts.length === 1) map.setView(pts[0], 16);
+  else map.fitBounds(L.latLngBounds(pts), { padding: [70, 70], maxZoom: 17 });
+}
+$('fitBtn').onclick = fitAll;
+
+function focusMember(uid) {
+  const m = markers[uid];
+  if (!m || !map) return;
+  map.setView(m.getLatLng(), 17);
+  m.openPopup();
+  $('sheet').classList.remove('tall');
+}
+
+function placeAt(loc) {
+  if (!loc) return null;
+  let best = null, bestD = Infinity;
+  placesCache.forEach(p => {
+    const d = distM(loc.lat, loc.lng, p.lat, p.lng);
+    if (d <= (p.radius || 150) && d < bestD) { best = p; bestD = d; }
+  });
+  return best ? best.name : null;
+}
+
+function pinIcon(m, isMe, stale) {
+  const r = ROLES[m.role] || { icon: '📍', color: '#1D4785' };
+  return L.divIcon({
+    className: 'pin-wrap', iconSize: [0, 0],
+    html: `<div class="pin${isMe ? ' me' : ''}${stale ? ' stale' : ''}" style="--c:${r.color}"><div class="pin-name">${esc(m.name)}</div><div class="pin-dot">${r.icon}</div></div>`
+  });
+}
+
+function popupHtml(uid) {
+  const m = members[uid], l = locs[uid];
+  const r = ROLES[m.role];
+  const pl = placeAt(l);
+  let h = `<b>${esc(m.name)}</b> ${r ? '(' + r.label + ')' : ''}<br>`;
+  h += pl ? `📌 في ${esc(pl)}<br>` : '';
+  h += `آخر تحديث: ${fmtTime(l.updatedAt)}<br>${timeAgo(l.updatedAt)}`;
+  if (m.phone && uid !== (me && me.uid)) h += `<br><a href="tel:${esc(m.phone)}">📞 ${esc(m.phone)}</a>`;
+  return h;
+}
+
+function updateMap() {
+  if (!map) return;
+  const seen = new Set();
+  Object.keys(members).forEach(uid => {
+    const l = locs[uid];
+    if (!l || l.lat == null || l.lng == null) return;
+    seen.add(uid);
+    const stale = Date.now() - l.updatedAt > 3600000;
+    const icon = pinIcon(members[uid], me && uid === me.uid, stale);
+    if (markers[uid]) {
+      markers[uid].setLatLng([l.lat, l.lng]);
+      markers[uid].setIcon(icon);
+      markers[uid].setPopupContent(popupHtml(uid));
+    } else {
+      markers[uid] = L.marker([l.lat, l.lng], { icon }).addTo(map).bindPopup(popupHtml(uid));
+    }
+  });
+  Object.keys(markers).forEach(uid => { if (!seen.has(uid)) { markers[uid].remove(); delete markers[uid]; } });
+  if (!fitted && Object.keys(markers).length) { fitted = true; fitAll(); }
+}
+
+/* =====================  قوائم الشاشة  ===================== */
+function renderFamily() {
+  const box = $('pFam');
+  const list = Object.keys(members).map(uid => ({ uid, m: members[uid], l: locs[uid] }));
+  list.sort((a, b) => (me && a.uid === me.uid ? -1 : me && b.uid === me.uid ? 1 : a.m.name.localeCompare(b.m.name, 'ar')));
+  if (!list.length) { box.innerHTML = '<div class="empty">بنجيب أفراد العيلة...</div>'; return; }
+  box.innerHTML = '';
+  list.forEach(({ uid, m, l }) => {
+    const r = ROLES[m.role] || { icon: '👤', color: '#1D4785', label: '' };
+    const isMe = me && uid === me.uid;
+    const age = l ? Date.now() - l.updatedAt : Infinity;
+    const dot = age < 600000 ? 'fresh' : age < 3600000 ? 'warm' : '';
+    const pl = placeAt(l);
+    const status = l ? (pl ? `📌 في ${esc(pl)}` : 'برّه الأماكن المحددة') : 'لسه ما شاركش مكانه';
+    const when = l ? `آخر تحديث: ${fmtTime(l.updatedAt)} · ${timeAgo(l.updatedAt)}` : '';
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.innerHTML = `
+      <div class="av" style="--c:${r.color}">${r.icon}<span class="dot ${dot}"></span></div>
+      <div class="rbody">
+        <div class="rname">${esc(m.name)}${isMe ? ' <span class="rsub">(أنت)</span>' : ` <span class="rsub">${r.label}</span>`}</div>
+        <div class="rsub">${status}</div>
+        <div class="rsub">${when}</div>
+      </div>
+      <div class="ract"></div>`;
+    const act = row.querySelector('.ract');
+    if (l) {
+      const b = document.createElement('button');
+      b.className = 'ibtn'; b.textContent = '📍'; b.setAttribute('aria-label', 'على الخريطة');
+      b.onclick = () => focusMember(uid);
+      act.appendChild(b);
+    }
+    if (!isMe && m.phone) {
+      const a = document.createElement('a');
+      a.className = 'ibtn'; a.textContent = '📞'; a.href = 'tel:' + m.phone; a.setAttribute('aria-label', 'اتصل');
+      act.appendChild(a);
+    }
+    box.appendChild(row);
+  });
+}
+
+function eventText(ev) {
+  const r = ROLES[ev.role];
+  const ic = r ? r.icon + ' ' : '';
+  const f = isFemale(ev.role);
+  if (ev.type === 'location_off') return `⚠️ ${ev.who} ${f ? 'قفلت' : 'قفل'} الموقع`;
+  return `${ic}${ev.who} ${f ? 'وصلت' : 'وصل'} ${ev.place}`;
+}
+function renderEvents() {
+  const box = $('pEvents');
+  if (!evCache.length) { box.innerHTML = '<div class="empty">لسه محدش وصل مكان من الأماكن المحددة.</div>'; return; }
+  box.innerHTML = '';
+  evCache.forEach(ev => {
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.innerHTML = `<div class="rbody"><div class="rname">${esc(eventText(ev))}</div><div class="rsub">${fmtTime(ev.at)}</div></div>`;
+    box.appendChild(row);
+  });
+}
+
+function setPlaces(arr) {
+  placesCache = arr;
+  localStorage.setItem('elty_places', JSON.stringify(arr));
+  renderPlaces();
+  renderFamily();
+  updateMap();
+}
+function renderPlaces() {
+  const list = $('placesList');
+  list.innerHTML = placesCache.length ? '' : '<div class="empty">لسه مفيش أماكن. ضيف البيت والشغل والجامعة وهتوصلك إشعارات لما حد يوصلهم.</div>';
+  placesCache.forEach(pl => {
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.innerHTML = `<div class="av" style="--c:#6D3FD1">📌</div><div class="rbody"><div class="rname">${esc(pl.name)}</div><div class="rsub">نطاق ${pl.radius} متر</div></div><div class="ract"></div>`;
+    const act = row.querySelector('.ract');
+    const go = document.createElement('button');
+    go.className = 'ibtn'; go.textContent = '📍';
+    go.onclick = () => { if (map) { map.setView([pl.lat, pl.lng], 16); $('sheet').classList.remove('tall'); } };
+    const del = document.createElement('button');
+    del.className = 'ibtn'; del.textContent = '🗑';
+    del.onclick = () => deletePlace(pl);
+    act.appendChild(go); act.appendChild(del);
+    list.appendChild(row);
+  });
+  if (!map) return;
+  const ids = new Set(placesCache.map(x => x.id));
+  Object.keys(placeLayers).forEach(id => { if (!ids.has(id)) { placeLayers[id].remove(); delete placeLayers[id]; } });
+  placesCache.forEach(pl => {
+    if (placeLayers[pl.id]) {
+      placeLayers[pl.id].setLatLng([pl.lat, pl.lng]);
+      placeLayers[pl.id].setRadius(pl.radius);
+    } else {
+      placeLayers[pl.id] = L.circle([pl.lat, pl.lng], { radius: pl.radius, color: '#6D3FD1', weight: 2, fillOpacity: 0.12 })
+        .addTo(map).bindTooltip(pl.name, { permanent: true, direction: 'top', className: 'place-tip' });
+    }
+  });
+}
+
+document.querySelectorAll('#tabs .tab').forEach(t => t.onclick = () => {
+  document.querySelectorAll('#tabs .tab').forEach(x => x.classList.toggle('on', x === t));
+  ['pFam', 'pPlaces', 'pEvents'].forEach(id => $(id).classList.toggle('hidden', id !== t.dataset.tab));
+});
+$('grab').onclick = () => {
+  $('sheet').classList.toggle('tall');
+  setTimeout(() => map && map.invalidateSize(), 300);
+};
+
+/* =====================  الأماكن المهمة  ===================== */
+async function createPlace(lat, lng) {
+  const msg = $('placeMsg');
+  const name = (prompt('اسم المكان؟ (مثال: البيت / الشغل / الجامعة)') || '').trim().slice(0, 40);
+  if (!name) { msg.textContent = ''; return; }
+  let radius = parseInt(fixDigits(prompt('نصف القطر بالمتر؟ (الافتراضي 150)', '150') || '150'), 10) || 150;
+  radius = Math.max(50, Math.min(1000, radius));
+  try {
+    await addDoc(fcol('places'), { name, lat, lng, radius, createdBy: me.uid });
+    msg.textContent = 'تمت إضافة "' + name + '" ✅';
+  } catch (e) { msg.textContent = 'تعذر الحفظ: ' + errText(e); }
+}
+$('addHere').onclick = () => {
+  const msg = $('placeMsg');
+  if (!navigator.geolocation) { msg.textContent = 'الجهاز مش بيدعم تحديد الموقع.'; return; }
+  msg.textContent = 'بنجيب موقعك...';
+  navigator.geolocation.getCurrentPosition(
+    (pos) => createPlace(pos.coords.latitude, pos.coords.longitude),
+    () => { msg.textContent = 'تعذر تحديد موقعك. اتأكد إن الموقع شغال.'; },
+    { enableHighAccuracy: true, timeout: 15000 }
+  );
+};
+$('addOnMap').onclick = () => {
+  const msg = $('placeMsg');
+  if (!map) { msg.textContent = 'الخريطة لسه مش جاهزة.'; return; }
+  pickingPlace = true;
+  msg.textContent = 'دوس على الخريطة في مكان المكان اللي عايزه...';
+  $('sheet').classList.remove('tall');
+  map.once('click', (e) => { pickingPlace = false; msg.textContent = ''; createPlace(e.latlng.lat, e.latlng.lng); });
+};
+async function deletePlace(pl) {
+  if (!confirm('تمسح "' + pl.name + '" لكل العيلة؟')) return;
+  try { await deleteDoc(fdoc('places', pl.id)); }
+  catch (e) { $('placeMsg').textContent = 'تعذر المسح: ' + errText(e); }
+}
+
+/* =====================  الوصول والإشعارات  ===================== */
+let polling = false;
+let notifId = Math.floor(Date.now() / 1000) % 1000000;
+
+async function notify(text) {
+  toast(text);
+  if (!isNative) return;
+  try {
+    const LN = window.Capacitor.Plugins.LocalNotifications;
+    if (LN) await LN.schedule({ notifications: [{ id: ++notifId, title: 'علتي', body: text, channelId: 'arrivals' }] });
+  } catch (e) {}
+}
+
+async function sendEvent(type, place) {
+  if (!me) return;
+  await httpJson(`${famFS()}/events?key=${KEY}`, 'POST', { fields: {
+    uid: { stringValue: me.uid },
+    who: { stringValue: me.name },
+    role: { stringValue: me.role },
+    place: { stringValue: place || '' },
+    type: { stringValue: type },
+    at: { integerValue: String(Date.now()) }
+  } });
+}
+
+async function checkArrival(lat, lng) {
+  if (!me || !placesCache.length) return;
+  let state = {};
+  try { state = JSON.parse(localStorage.getItem('elty_inside') || '{}'); } catch (e) {}
+  const arrived = [];
+  placesCache.forEach(pl => {
+    const d = distM(lat, lng, pl.lat, pl.lng), r = pl.radius || 150, was = state[pl.id];
+    if (d <= r) {
+      if (was === false) arrived.push(pl);
+      if (was !== true) state[pl.id] = true;
+    } else if (d > r * 1.3 && was !== false) {
+      state[pl.id] = false;
+    }
+  });
+  localStorage.setItem('elty_inside', JSON.stringify(state));
+  for (const pl of arrived) { try { await sendEvent('arrive', pl.name); } catch (e) {} }
+}
+
+async function pollEvents() {
+  if (polling || !me) return;
+  polling = true;
+  try {
+    let last = Number(localStorage.getItem('elty_last_event')) || 0;
+    if (!last) { last = Date.now(); localStorage.setItem('elty_last_event', String(last)); }
+    const res = await httpJson(`${famFS()}:runQuery?key=${KEY}`, 'POST', { structuredQuery: {
+      from: [{ collectionId: 'events' }],
+      where: { fieldFilter: { field: { fieldPath: 'at' }, op: 'GREATER_THAN', value: { integerValue: String(last) } } },
+      orderBy: [{ field: { fieldPath: 'at' }, direction: 'ASCENDING' }],
+      limit: 20
+    } });
+    for (const row of (res || [])) {
+      if (!row.document) continue;
+      const f = row.document.fields || {};
+      const ev = { uid: fval(f.uid), who: fval(f.who), role: fval(f.role), place: fval(f.place), type: fval(f.type), at: fval(f.at) };
+      if (ev.at > last) last = ev.at;
+      if (ev.uid && ev.uid !== me.uid) await notify(eventText(ev));
+    }
+    localStorage.setItem('elty_last_event', String(last));
+  } catch (e) {
+  } finally { polling = false; }
+}
+
+async function refreshPlacesREST() {
+  if (!me) return;
+  try {
+    const res = await httpJson(`${famFS()}/places?key=${KEY}&pageSize=100`, 'GET');
+    setPlaces((res.documents || []).map(d => {
+      const f = d.fields || {};
+      return { id: d.name.split('/').pop(), name: fval(f.name), lat: fval(f.lat), lng: fval(f.lng), radius: fval(f.radius) || 150 };
+    }));
+  } catch (e) {}
+}
+
+/* =====================  مشاركة الموقع  ===================== */
+async function writeLocation(lat, lng) {
+  if (isNative) {
+    await httpJson(`${famFS()}/locations/${me.uid}?key=${KEY}`, 'PATCH', { fields: {
+      lat: { doubleValue: lat },
+      lng: { doubleValue: lng },
+      updatedAt: { integerValue: String(Date.now()) }
+    } });
+  } else {
+    await setDoc(fdoc('locations', me.uid), { lat, lng, updatedAt: Date.now() });
+  }
+}
+
+let lastWrite = 0;
+async function onPosition(lat, lng, force) {
+  if (!me) return;
+  checkArrival(lat, lng);
+  if (!force && Date.now() - lastWrite < 30000) return;
+  lastWrite = Date.now();
+  try { await writeLocation(lat, lng); } catch (e) { toast('تعذر إرسال الموقع: ' + errText(e)); }
+}
+
+function shareNow() {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) { toast('الجهاز مش بيدعم تحديد الموقع.'); return resolve(false); }
+    navigator.geolocation.getCurrentPosition(async (pos) => {
+      await onPosition(pos.coords.latitude, pos.coords.longitude, true);
+      resolve(true);
+    }, () => { guardTick(); resolve(false); }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 });
+  });
+}
+
+let bgPlugin = null, watcherId = null;
 async function startNativeTracking() {
-  if (!isNative || !myName()) return;
-  checkBattery();
-  if (watcherId) return;
-  const statusEl = document.getElementById('statusMsg');
+  if (!isNative || !me || watcherId) return;
   try {
     const LN = window.Capacitor.Plugins.LocalNotifications;
     if (LN) {
@@ -346,476 +1085,188 @@ async function startNativeTracking() {
       requestPermissions: true,
       stale: false,
       distanceFilter: 30
-    }, async (loc, err) => {
-      if (err) {
-        if (err.code === 'NOT_AUTHORIZED') {
-          statusEl.textContent = 'لازم تسمح بالموقع من إعدادات التطبيق.';
-          bgPlugin.openSettings();
-        }
-        return;
-      }
-      if (!loc) return;
-      checkArrival(loc.latitude, loc.longitude);
-      if (Date.now() - lastNativeWrite < 30000) return;
-      lastNativeWrite = Date.now();
-      pollEvents();
-      try {
-        await writeLocationNative(loc.latitude, loc.longitude);
-        statusEl.textContent = 'آخر تحديث للموقع: دلوقتي ✅';
-      } catch (e) {
-        statusEl.textContent = 'تعذر إرسال الموقع: ' + (e && e.message ? e.message : e);
-      }
+    }, (loc, err) => {
+      if (err) { if (err.code === 'NOT_AUTHORIZED') blockLocation('denied'); return; }
+      if (loc) { unblockLocation(); onPosition(loc.latitude, loc.longitude, false); pollEvents(); }
     });
-  } catch (e) {
-    statusEl.textContent = 'تعذر تشغيل التتبع: ' + (e && e.message ? e.message : e);
-  }
+  } catch (e) { toast('تعذر تشغيل التتبع: ' + errText(e)); }
 }
-
 function stopNativeTracking() {
-  if (bgPlugin && watcherId) bgPlugin.removeWatcher({ id: watcherId });
+  if (bgPlugin && watcherId) { try { bgPlugin.removeWatcher({ id: watcherId }); } catch (e) {} }
   watcherId = null;
 }
 
-window.shareLocation = function() {
-  const statusEl = document.getElementById('statusMsg');
-  if (!db) { statusEl.textContent = 'التطبيق لسه مش متصل، جرب تقفل وتفتح تاني.'; return; }
-  if (!navigator.geolocation) { statusEl.textContent = 'الجهاز مش بيدعم تحديد الموقع.'; return; }
-  statusEl.textContent = 'بنجيب موقعك...';
-  navigator.geolocation.getCurrentPosition(async (pos) => {
-    try {
-      await setDoc(doc(db, ...fam('locations', myName())), {
-        lat: pos.coords.latitude,
-        lng: pos.coords.longitude,
-        role: myRole() || '',
-        updatedAt: Date.now()
-      });
-      statusEl.textContent = 'تم مشاركة موقعك ✅';
-      checkArrival(pos.coords.latitude, pos.coords.longitude);
-    } catch (e) {
-      statusEl.textContent = 'حصل خطأ: ' + (e && e.message ? e.message : e);
-    }
-  }, () => {
-    statusEl.textContent = 'مسموحش بالوصول للموقع، افتح الإعدادات وسمح.';
-  }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 });
-};
-
-function timeAgo(ts) {
-  if (!ts) return 'لسه محدش عرف مكانه';
-  const diffMin = Math.round((Date.now() - ts) / 60000);
-  if (diffMin < 1) return 'دلوقتي';
-  if (diffMin < 60) return `من ${diffMin} دقيقة`;
-  const h = Math.round(diffMin / 60);
-  return `من ${h} ساعة`;
-}
-
-function esc(s) {
-  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-}
-
-const ROLES = {
-  father: { label: 'أب', icon: '👨' },
-  mother: { label: 'أم', icon: '👩' },
-  son: { label: 'ابن', icon: '👦' },
-  daughter: { label: 'ابنة', icon: '👧' }
-};
-let map = null, markers = {}, lastDocs = [], fitted = false;
-
-function fmtTime(ts) {
-  if (!ts) return '—';
-  const d = new Date(ts), now = new Date();
-  const t = d.toLocaleTimeString('ar-EG', { hour: 'numeric', minute: '2-digit' });
-  const day = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
-  const diffDays = Math.round((day(now) - day(d)) / 86400000);
-  if (diffDays === 0) return 'النهاردة ' + t;
-  if (diffDays === 1) return 'امبارح ' + t;
-  return d.toLocaleDateString('ar-EG', { day: 'numeric', month: 'long' }) + ' ' + t;
-}
-
-function initMap() {
-  if (map || !window.L) return;
-  map = L.map('map').setView([30.0444, 31.2357], 11);
-  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19, attribution: '© OpenStreetMap'
-  }).addTo(map);
-}
-
-window.fitAll = function() {
-  if (!map) return;
-  const pts = Object.values(markers).map(m => m.getLatLng());
-  if (!pts.length) return;
-  if (pts.length === 1) map.setView(pts[0], 16);
-  else map.fitBounds(L.latLngBounds(pts), { padding: [50, 50], maxZoom: 17 });
-};
-
-function focusMember(id) {
-  const m = markers[id];
-  if (!m || !map) return;
-  map.setView(m.getLatLng(), 17);
-  m.openPopup();
-  document.getElementById('map').scrollIntoView({ behavior: 'smooth', block: 'center' });
-}
-
-function pinIcon(id, role, isMe) {
-  return L.divIcon({
-    className: 'pin-wrap', iconSize: [0, 0],
-    html: `<div class="pin${isMe ? ' me' : ''}"><div class="pin-label">${esc(id)}</div><div class="pin-dot">${role ? role.icon : '📍'}</div></div>`
+/* =====================  الموقع لازم يفضل شغال  ===================== */
+let locBlocked = false, offSentAt = 0;
+function probeLocation() {
+  return new Promise((res) => {
+    if (!navigator.geolocation) return res('ok');
+    navigator.geolocation.getCurrentPosition(
+      () => res('ok'),
+      (err) => res(err.code === 1 ? 'denied' : err.code === 2 ? 'off' : 'ok'),
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 0 }
+    );
   });
 }
-
-function renderMembers() {
-  const list = document.getElementById('membersList');
-  list.innerHTML = '';
-  if (!lastDocs.length) list.innerHTML = '<div class="status">محدش شارك مكانه لسه.</div>';
-  const seen = new Set();
-  lastDocs.forEach(({ id, data }) => {
-    const role = ROLES[data.role];
-    const hasPos = data.lat && data.lng;
-    const popup = `<b>${esc(id)}</b>${role ? ' (' + role.label + ')' : ''}<br>آخر تحديث للموقع:<br><b>${fmtTime(data.updatedAt)}</b><br>${timeAgo(data.updatedAt)}`;
-    if (hasPos && map) {
-      seen.add(id);
-      const isMe = id === myName();
-      if (markers[id]) {
-        markers[id].setLatLng([data.lat, data.lng]);
-        markers[id].setIcon(pinIcon(id, role, isMe));
-        markers[id].setPopupContent(popup);
-      } else {
-        markers[id] = L.marker([data.lat, data.lng], { icon: pinIcon(id, role, isMe) }).addTo(map).bindPopup(popup);
-      }
-    }
-    const row = document.createElement('div');
-    row.className = 'member';
-    row.innerHTML = `
-      <div>
-        <div class="member-name">${role ? role.icon + ' ' : ''}${esc(id)}${role ? ' <span class="member-time">(' + role.label + ')</span>' : ''}</div>
-        <div class="member-time">آخر تحديث: ${fmtTime(data.updatedAt)} · ${timeAgo(data.updatedAt)}</div>
-      </div>
-      <div class="member-btns"></div>`;
-    const btns = row.querySelector('.member-btns');
-    if (hasPos) {
-      const focus = document.createElement('button');
-      focus.className = 'map-link'; focus.style.background = 'transparent';
-      focus.textContent = '📍 على الخريطة';
-      focus.onclick = () => focusMember(id);
-      btns.appendChild(focus);
-      const gm = document.createElement('a');
-      gm.className = 'map-link'; gm.target = '_blank';
-      gm.href = `https://www.google.com/maps?q=${data.lat},${data.lng}`;
-      gm.textContent = '🗺️';
-      btns.appendChild(gm);
-    }
-    list.appendChild(row);
-  });
-  Object.keys(markers).forEach(id => {
-    if (!seen.has(id)) { markers[id].remove(); delete markers[id]; }
-  });
-  if (!fitted && Object.keys(markers).length) { fitted = true; fitAll(); }
+function blockLocation(kind) {
+  if (!me) return;
+  $('locMsg').textContent = kind === 'off'
+    ? 'خدمة الموقع (GPS) مقفولة على التليفون. شغّلها عشان العيلة تشوفك والتطبيق يكمل.'
+    : 'صلاحية الموقع مقفولة للتطبيق. اسمح بالموقع "طول الوقت" عشان العيلة تشوفك والتطبيق يكمل.';
+  $('vLoc').classList.remove('hidden');
+  if (!locBlocked) stopNativeTracking();
+  locBlocked = true;
+  if (Date.now() - offSentAt > 3600000) {
+    offSentAt = Date.now();
+    sendEvent('location_off', '').catch(() => {});
+  }
 }
-
-let unsubMembers = null;
-function listenMembers() {
-  if (unsubMembers) unsubMembers();
-  unsubMembers = onSnapshot(collection(db, ...fam('locations')), (snap) => {
-    lastDocs = [];
-    snap.forEach(d => lastDocs.push({ id: d.id, data: d.data() }));
-    renderMembers();
-  }, dbError);
+function unblockLocation() {
+  if (!locBlocked) return;
+  locBlocked = false;
+  $('vLoc').classList.add('hidden');
+  startNativeTracking();
+  shareNow();
 }
-setInterval(() => { if (lastDocs.length) renderMembers(); }, 60000);
-
-// ---- الأماكن المهمة + إشعارات الوصول ----
-const FS = `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/(default)/documents`;
-const FSKEY = `key=${firebaseConfig.apiKey}`;
-let placesCache = [];
-try { placesCache = JSON.parse(localStorage.getItem('elty_places') || '[]'); } catch (e) {}
-let placeLayers = {};
-let polling = false;
-let notifId = Math.floor(Date.now() / 1000) % 1000000;
-let pickingPlace = false;
-
-const fval = (f) => !f ? undefined
-  : ('stringValue' in f) ? f.stringValue
-  : ('doubleValue' in f) ? f.doubleValue
-  : ('integerValue' in f) ? Number(f.integerValue) : undefined;
-
-function toast(msg) {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.classList.remove('hidden');
-  clearTimeout(toast._t);
-  toast._t = setTimeout(() => t.classList.add('hidden'), 7000);
+async function guardTick() {
+  if (!me || !appStarted) return;
+  const s = await probeLocation();
+  if (s === 'ok') unblockLocation(); else blockLocation(s);
 }
+$('locRetry').onclick = guardTick;
+$('locSettings').onclick = async () => {
+  try {
+    const B = window.Capacitor.registerPlugin('ElityBattery');
+    if ($('locMsg').textContent.includes('GPS')) await B.openLocationSettings(); else await B.openAppSettings();
+  } catch (e) { toast('افتح إعدادات الموبايل وشغّل الموقع لتطبيق علتي.'); }
+};
 
-// طلبات HTTP: في التطبيق بتتبعت native عشان تشتغل في الخلفية
-async function httpJson(url, method, body) {
+/* =====================  ملفي  ===================== */
+function renderMeBtn() {
+  const r = ROLES[me.role] || { icon: '👤', color: '#1D4785' };
+  const b = $('meBtn');
+  b.style.setProperty('--c', r.color);
+  b.textContent = r.icon;
+}
+async function openProfile() {
+  const r = ROLES[me.role] || { icon: '👤', color: '#1D4785', label: '' };
+  $('pAv').style.setProperty('--c', r.color);
+  $('pAv').textContent = r.icon;
+  $('pName').textContent = me.name;
+  $('pRole').textContent = `🔒 ${r.label} · الاسم والدور ثابتين`;
+  $('pEmail').value = me.email;
+  $('pPhone').value = me.phone || '';
+  $('pErr').textContent = '';
+  const avail = await bioAvailable();
+  $('pBioSec').classList.toggle('hidden', !isNative);
   if (isNative) {
-    const r = await window.Capacitor.Plugins.CapacitorHttp.request({
-      url, method, headers: { 'Content-Type': 'application/json' }, data: body
-    });
-    if (r.status >= 400) throw new Error('HTTP ' + r.status);
-    return r.data;
+    $('pBioState').textContent = !avail ? 'البصمة مش متاحة على الجهاز ده (سجّل بصمة في إعدادات الموبايل الأول).'
+      : bioOn() ? 'الدخول بالبصمة شغال.' : 'الدخول بالبصمة مقفول.';
+    $('pBio').classList.toggle('hidden', !avail);
+    $('pBio').textContent = bioOn() ? 'إيقاف البصمة' : 'تفعيل البصمة';
   }
-  const r = await fetch(url, {
-    method, headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined
-  });
-  if (!r.ok) throw new Error('HTTP ' + r.status);
-  return r.json();
+  $('vProfile').classList.remove('hidden');
 }
+$('meBtn').onclick = openProfile;
+$('pClose').onclick = () => $('vProfile').classList.add('hidden');
+$('vProfile').addEventListener('click', (e) => { if (e.target === $('vProfile')) $('vProfile').classList.add('hidden'); });
 
-function distM(lat1, lng1, lat2, lng2) {
-  const R = 6371000, t = (x) => x * Math.PI / 180;
-  const dLat = t(lat2 - lat1), dLng = t(lng2 - lng1);
-  const h = Math.sin(dLat / 2) ** 2 + Math.cos(t(lat1)) * Math.cos(t(lat2)) * Math.sin(dLng / 2) ** 2;
-  return 2 * R * Math.asin(Math.sqrt(h));
-}
-
-function eventText(ev) {
-  const r = ROLES[ev.role];
-  const female = ev.role === 'mother' || ev.role === 'daughter';
-  return `${r ? r.icon + ' ' : ''}${ev.who} ${female ? 'وصلت' : 'وصل'} ${ev.place}`;
-}
-
-async function notify(text) {
-  toast(text);
-  if (!isNative) return;
+$('pSave').onclick = async () => {
+  const phone = fixDigits($('pPhone').value).replace(/[\s-]/g, '');
+  if (!/^\+?\d{8,15}$/.test(phone)) { $('pErr').textContent = 'رقم التليفون غلط. اكتبه أرقام بس.'; return; }
   try {
-    const LN = window.Capacitor.Plugins.LocalNotifications;
-    if (LN) await LN.schedule({ notifications: [{ id: ++notifId, title: 'علتي', body: text, channelId: 'arrivals' }] });
-  } catch (e) {}
-}
-
-// بيشوف لو أنا لسه داخل مكان مهم (ويبعت حدث وصول للباقي)
-async function checkArrival(lat, lng) {
-  if (!myName() || !placesCache.length) return;
-  let state = {};
-  try { state = JSON.parse(localStorage.getItem('elty_inside') || '{}'); } catch (e) {}
-  const arrived = [];
-  placesCache.forEach(pl => {
-    const d = distM(lat, lng, pl.lat, pl.lng), r = pl.radius || 150, was = state[pl.id];
-    if (d <= r) {
-      if (was === false) arrived.push(pl);
-      if (was !== true) state[pl.id] = true;
-    } else if (d > r * 1.3 && was !== false) {
-      state[pl.id] = false;
+    await updateDoc(fdoc('members', me.uid), { name: me.name, role: me.role, email: me.email, createdAt: me.createdAt, phone });
+    me.phone = phone;
+    $('pErr').textContent = '';
+    toast('اتحفظ رقم التليفون ✅');
+  } catch (e) { $('pErr').textContent = errText(e); }
+};
+$('pShare').onclick = async () => { await shareNow(); toast('اتحدّث موقعك ✅'); };
+$('pReset').onclick = async () => {
+  try { await sendPasswordResetEmail(auth, me.email); toast('بعتنا رابط تغيير الباسورد على الإيميل.'); }
+  catch (e) { $('pErr').textContent = errText(e); }
+};
+$('pBio').onclick = async () => {
+  try {
+    if (bioOn()) { await bioDisable(); toast('البصمة اتقفلت.'); }
+    else {
+      const pass = prompt('اكتب الباسورد عشان نفعّل البصمة');
+      if (!pass) return;
+      await reauthenticateWithCredential(auth.currentUser, EmailAuthProvider.credential(me.email, pass));
+      await bioEnable(me.email, pass);
+      toast('البصمة اتفعّلت ✅');
     }
-  });
-  localStorage.setItem('elty_inside', JSON.stringify(state));
-  for (const pl of arrived) {
-    try {
-      await httpJson(`${FS}/families/${famId()}/events?${FSKEY}`, 'POST', { fields: {
-        who: { stringValue: myName() },
-        role: { stringValue: myRole() || '' },
-        place: { stringValue: pl.name },
-        at: { integerValue: String(Date.now()) }
-      } });
-    } catch (e) {}
-  }
-}
-
-// بيجيب الوصولات الجديدة ويطلّع إشعار (كل دقيقة + لما التطبيق يتفتح)
-async function pollEvents() {
-  if (polling || !myName()) return;
-  polling = true;
-  try {
-    let last = Number(localStorage.getItem('elty_last_event')) || 0;
-    if (!last) { last = Date.now(); localStorage.setItem('elty_last_event', String(last)); }
-    const res = await httpJson(`${FS}/families/${famId()}:runQuery?${FSKEY}`, 'POST', { structuredQuery: {
-      from: [{ collectionId: 'events' }],
-      where: { fieldFilter: { field: { fieldPath: 'at' }, op: 'GREATER_THAN', value: { integerValue: String(last) } } },
-      orderBy: [{ field: { fieldPath: 'at' }, direction: 'ASCENDING' }],
-      limit: 20
-    } });
-    for (const row of (res || [])) {
-      if (!row.document) continue;
-      const f = row.document.fields || {};
-      const ev = { who: fval(f.who), role: fval(f.role), place: fval(f.place), at: fval(f.at) };
-      if (ev.at > last) last = ev.at;
-      if (ev.who && ev.who !== myName()) await notify(eventText(ev));
-    }
-    localStorage.setItem('elty_last_event', String(last));
-  } catch (e) {
-  } finally { polling = false; }
-}
-
-function setPlaces(arr) {
-  placesCache = arr;
-  localStorage.setItem('elty_places', JSON.stringify(arr));
-  renderPlaces();
-}
-
-async function refreshPlacesREST() {
-  if (!myName()) return;
-  try {
-    const res = await httpJson(`${FS}/families/${famId()}/places?${FSKEY}&pageSize=100`, 'GET');
-    setPlaces((res.documents || []).map(d => {
-      const f = d.fields || {};
-      return { id: d.name.split('/').pop(), name: fval(f.name), lat: fval(f.lat), lng: fval(f.lng), radius: fval(f.radius) || 150 };
-    }));
-  } catch (e) {}
-}
-
-function renderPlaces() {
-  const list = document.getElementById('placesList');
-  if (list) {
-    list.innerHTML = placesCache.length ? '' : '<div class="status">لسه مفيش أماكن. ضيف البيت والشغل والجامعة.</div>';
-    placesCache.forEach(pl => {
-      const row = document.createElement('div');
-      row.className = 'member';
-      row.innerHTML = `<div><div class="member-name">📌 ${esc(pl.name)}</div><div class="member-time">نطاق ${pl.radius} متر</div></div><div class="member-btns"></div>`;
-      const btns = row.querySelector('.member-btns');
-      const go = document.createElement('button');
-      go.className = 'small-btn'; go.textContent = '📍';
-      go.onclick = () => { if (map) { map.setView([pl.lat, pl.lng], 16); document.getElementById('map').scrollIntoView({ behavior: 'smooth', block: 'center' }); } };
-      const del = document.createElement('button');
-      del.className = 'small-btn'; del.textContent = '🗑';
-      del.onclick = () => deletePlace(pl);
-      btns.appendChild(go); btns.appendChild(del);
-      list.appendChild(row);
-    });
-  }
-  if (!map) return;
-  const ids = new Set(placesCache.map(x => x.id));
-  Object.keys(placeLayers).forEach(id => {
-    if (!ids.has(id)) { placeLayers[id].remove(); delete placeLayers[id]; }
-  });
-  placesCache.forEach(pl => {
-    if (placeLayers[pl.id]) {
-      placeLayers[pl.id].setLatLng([pl.lat, pl.lng]);
-      placeLayers[pl.id].setRadius(pl.radius);
-    } else {
-      placeLayers[pl.id] = L.circle([pl.lat, pl.lng], { radius: pl.radius, color: '#7c3aed', weight: 2, fillOpacity: 0.12 })
-        .addTo(map).bindTooltip(pl.name, { permanent: true, direction: 'top', className: 'place-tip' });
-    }
-  });
-}
-
-async function createPlace(lat, lng) {
-  const msg = document.getElementById('placeMsg');
-  const name = (prompt('اسم المكان؟ (مثال: البيت / الشغل / الجامعة)') || '').trim();
-  if (!name) { msg.textContent = ''; return; }
-  let radius = parseInt(prompt('نصف القطر بالمتر؟ (الافتراضي 150)', '150'), 10) || 150;
-  radius = Math.max(50, Math.min(1000, radius));
-  try {
-    await addDoc(collection(db, ...fam('places')), { name, lat, lng, radius, createdBy: myName() });
-    msg.textContent = 'تمت إضافة "' + name + '" ✅';
-  } catch (e) {
-    msg.textContent = 'تعذر الحفظ: ' + (e && e.message ? e.message : e);
-  }
-}
-
-window.addPlaceHere = function() {
-  const msg = document.getElementById('placeMsg');
-  if (!db) { msg.textContent = 'التطبيق لسه مش متصل.'; return; }
-  if (!navigator.geolocation) { msg.textContent = 'الجهاز مش بيدعم تحديد الموقع.'; return; }
-  msg.textContent = 'بنجيب موقعك...';
-  navigator.geolocation.getCurrentPosition(
-    (pos) => createPlace(pos.coords.latitude, pos.coords.longitude),
-    () => { msg.textContent = 'مسموحش بالوصول للموقع.'; },
-    { enableHighAccuracy: true, timeout: 15000 }
-  );
+    openProfile();
+  } catch (e) { $('pErr').textContent = 'تعذر تغيير إعداد البصمة.'; }
 };
 
-window.addPlaceOnMap = function() {
-  const msg = document.getElementById('placeMsg');
-  if (!db || !map) { msg.textContent = 'الخريطة لسه مش جاهزة.'; return; }
-  pickingPlace = true;
-  msg.textContent = 'دوس على الخريطة في مكان المكان اللي عايزه...';
-  document.getElementById('map').scrollIntoView({ behavior: 'smooth', block: 'center' });
-  map.once('click', (e) => {
-    pickingPlace = false;
-    createPlace(e.latlng.lat, e.latlng.lng);
-  });
-};
-
-async function deletePlace(pl) {
-  if (!confirm('تمسح "' + pl.name + '" لكل العيلة؟')) return;
-  try { await deleteDoc(doc(db, ...fam('places', pl.id))); } catch (e) {
-    document.getElementById('placeMsg').textContent = 'تعذر المسح: ' + (e && e.message ? e.message : e);
-  }
-}
-
-let unsubPlaces = null, unsubEvents = null;
-function listenPlaces() {
-  if (unsubPlaces) unsubPlaces();
-  unsubPlaces = onSnapshot(collection(db, ...fam('places')), (snap) => {
+/* =====================  تشغيل التطبيق  ===================== */
+let unsub = [];
+function listen() {
+  unsub.forEach(u => u());
+  unsub = [];
+  const fail = (e) => toast(errText(e));
+  unsub.push(onSnapshot(fcol('members'), (snap) => {
+    members = {};
+    snap.forEach(d => { members[d.id] = d.data(); });
+    if (members[me.uid]) { me = Object.assign({ uid: me.uid, email: me.email }, members[me.uid]); renderMeBtn(); }
+    renderFamily(); updateMap();
+  }, fail));
+  unsub.push(onSnapshot(fcol('locations'), (snap) => {
+    locs = {};
+    snap.forEach(d => { locs[d.id] = d.data(); });
+    renderFamily(); updateMap();
+  }, fail));
+  unsub.push(onSnapshot(fcol('places'), (snap) => {
     const arr = [];
     snap.forEach(d => {
       const x = d.data();
       arr.push({ id: d.id, name: x.name, lat: x.lat, lng: x.lng, radius: x.radius || 150 });
     });
     setPlaces(arr);
-  }, dbError);
-}
-
-function listenEvents() {
-  if (unsubEvents) unsubEvents();
-  unsubEvents = onSnapshot(query(collection(db, ...fam('events')), orderBy('at', 'desc'), limit(10)), (snap) => {
-    const list = document.getElementById('eventsList');
-    list.innerHTML = snap.empty ? '<div class="status">لسه محدش وصل مكان من الأماكن المحددة.</div>' : '';
-    snap.forEach(d => {
-      const ev = d.data();
-      const row = document.createElement('div');
-      row.className = 'member';
-      row.innerHTML = `<div><div class="member-name">${esc(eventText(ev))}</div><div class="member-time">${fmtTime(ev.at)}</div></div>`;
-      list.appendChild(row);
-    });
+  }, fail));
+  unsub.push(onSnapshot(query(fcol('events'), orderBy('at', 'desc'), limit(15)), (snap) => {
+    evCache = [];
+    snap.forEach(d => evCache.push(d.data()));
+    renderEvents();
     pollEvents();
-  }, dbError);
+  }, fail));
 }
 
-let bgStarted = false;
-function startBackground() {
-  if (bgStarted) return;
-  bgStarted = true;
+function enterApp() {
+  showView('app');
+  if (appStarted) return;
+  appStarted = true;
+  localStorage.setItem('elty_had_account', '1');
+  renderMeBtn();
+  initMap();
+  renderPlaces(); renderFamily(); renderEvents();
+  if (map) setTimeout(() => map.invalidateSize(), 100);
+  listen();
+  startNativeTracking();
   pollEvents();
   refreshPlacesREST();
   setInterval(pollEvents, 60000);
   setInterval(refreshPlacesREST, 600000);
+  setInterval(() => { renderFamily(); updateMap(); }, 60000);
+  // الويب: تحديث الموقع كل ٣ دقايق والتطبيق مفتوح
+  if (!isNative) setInterval(() => { if (document.visibilityState === 'visible') shareNow(); }, 180000);
+  // أول فحص بعد ما المستخدم يرد على طلبات الصلاحيات، وبعدها كل ٢٠ ثانية
+  setTimeout(guardTick, 25000);
+  setInterval(() => { if (document.visibilityState === 'visible') guardTick(); }, 20000);
+  setTimeout(() => { if (!isNative) shareNow(); }, 1500);
 }
 
-if (isNative) document.getElementById('bgHint').textContent = 'الموقع بيتحدث تلقائياً حتى لو التطبيق مقفول (لما تتحرك).';
-if (!isNative && /android/i.test(navigator.userAgent)) document.getElementById('apkBtn').style.display = 'block';
-showScreen();
-let lastShare = 0;
-const autoShare = () => {
-  if (!isNative && db && myName() && document.visibilityState === 'visible') {
-    lastShare = Date.now();
-    shareLocation();
-  }
-};
-setInterval(autoShare, 180000);
-// أندرويد بيوقف التايمر والتطبيق في الخلفية، فنحدّث الموقع أول ما التطبيق يرجع قدام
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') checkBattery();
-  if (document.visibilityState === 'visible' && Date.now() - lastShare > 60000) autoShare();
+  if (document.visibilityState === 'hidden') { hiddenAt = Date.now(); return; }
+  if (!me || !appStarted) return;
+  if (isNative && bioOn() && hiddenAt && Date.now() - hiddenAt > 30000) showLock();
+  guardTick();
+  pollEvents();
 });
 
-// ---- تثبيت التطبيق (PWA install prompt) ----
-let deferredPrompt = null;
-window.addEventListener('beforeinstallprompt', (e) => {
-  e.preventDefault();
-  deferredPrompt = e;
-  document.getElementById('installBtn').classList.remove('hidden');
-});
-window.doInstall = async function() {
-  if (!deferredPrompt) return;
-  deferredPrompt.prompt();
-  await deferredPrompt.userChoice;
-  deferredPrompt = null;
-  document.getElementById('installBtn').classList.add('hidden');
-};
-window.addEventListener('appinstalled', () => {
-  document.getElementById('installBtn').classList.add('hidden');
-});
-
-// iOS مش بيدعم البانر التلقائي - نوريله تعليمات بسيطة
-const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
-const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
-if (isIOS && !isStandalone) {
-  const btn = document.getElementById('installBtn');
-  btn.textContent = '⬇️ للتثبيت: دوس زر المشاركة 📤 ثم "إضافة إلى الشاشة الرئيسية"';
-  btn.classList.remove('hidden');
-  btn.onclick = null;
-}
+setAuthMode('register');
+if (!auth) { setAuthMode('login'); showView('auth'); }
 
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js').catch(() => {});

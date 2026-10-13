@@ -11,7 +11,7 @@ p = APP + '/AndroidManifest.xml'
 s = open(p, encoding='utf-8').read()
 perms = ['ACCESS_COARSE_LOCATION', 'ACCESS_FINE_LOCATION', 'ACCESS_BACKGROUND_LOCATION',
          'FOREGROUND_SERVICE', 'FOREGROUND_SERVICE_LOCATION', 'POST_NOTIFICATIONS', 'WAKE_LOCK',
-         'REQUEST_IGNORE_BATTERY_OPTIMIZATIONS']
+         'REQUEST_IGNORE_BATTERY_OPTIMIZATIONS', 'USE_BIOMETRIC']
 add = ''.join('    <uses-permission android:name="android.permission.%s" />\n' % x for x in perms)
 s = s.replace('<application', add + '    <application', 1)
 open(p, 'w', encoding='utf-8').write(s)

@@ -2,60 +2,95 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // كل بيانات العيلة تحت: families/{هاش الكود السري}/...
-    // مفيش أي صلاحية على families نفسها، فمحدش يقدر يعدّد العيلات ولا يخمّن الكود من قاعدة البيانات.
+    // لازم تكون مسجّل دخول (Firebase Authentication) عشان تقرأ أو تكتب أي حاجة.
+    // بيانات العيلة تحت: families/{هاش الكود السري}/...
+    // مفيش أي صلاحية على families نفسها، فمحدش يقدر يعدّد العيلات.
     // أي مسار تاني (زي القديم: /locations) مرفوض تلقائياً.
 
+    function signedIn() {
+      return request.auth != null;
+    }
     function validFamily(f) {
       return f.matches('[0-9a-f]{64}');
     }
-
-    // مكان كل واحد: families/{family}/locations/{الاسم}
-    match /families/{family}/locations/{person} {
-      allow read: if validFamily(family);
-      allow create, update: if validFamily(family)
-        && person.size() >= 1 && person.size() <= 30
-        && request.resource.data.keys().hasOnly(['lat', 'lng', 'role', 'updatedAt'])
-        && request.resource.data.keys().hasAll(['lat', 'lng', 'role', 'updatedAt'])
-        && request.resource.data.lat is number
-        && request.resource.data.lat >= -90 && request.resource.data.lat <= 90
-        && request.resource.data.lng is number
-        && request.resource.data.lng >= -180 && request.resource.data.lng <= 180
-        && request.resource.data.updatedAt is number
-        && request.resource.data.role is string
-        && request.resource.data.role.size() <= 12;
-      allow delete: if validFamily(family);
+    function incoming() {
+      return request.resource.data;
+    }
+    function validPhone(p) {
+      return p is string && p.size() >= 8 && p.size() <= 16;
+    }
+    function validLatLng() {
+      return incoming().lat is number && incoming().lat >= -90 && incoming().lat <= 90
+        && incoming().lng is number && incoming().lng >= -180 && incoming().lng <= 180;
     }
 
-    // الأماكن المهمة: families/{family}/places/{id}
+    // أي مستخدم يقرأ وينشئ ملف "عيلتي" بتاعه بس، ومينفعش يتعدل أو يتمسح.
+    match /users/{uid} {
+      allow read: if signedIn() && request.auth.uid == uid;
+      allow create: if signedIn() && request.auth.uid == uid
+        && incoming().keys().hasOnly(['fam'])
+        && incoming().fam is string && validFamily(incoming().fam);
+      allow update, delete: if false;
+    }
+
+    // ملف كل فرد: الاسم والدور والإيميل مقفولين بعد التسجيل، والتليفون بس هو اللي يتعدل.
+    match /families/{family}/members/{uid} {
+      allow read: if signedIn() && validFamily(family);
+      allow create: if signedIn() && validFamily(family) && request.auth.uid == uid
+        && incoming().keys().hasOnly(['name', 'role', 'phone', 'email', 'createdAt'])
+        && incoming().keys().hasAll(['name', 'role', 'phone', 'email', 'createdAt'])
+        && incoming().name is string && incoming().name.size() >= 2 && incoming().name.size() <= 20
+        && incoming().role in ['father', 'mother', 'son', 'daughter']
+        && validPhone(incoming().phone)
+        && incoming().email is string && incoming().email.size() <= 100
+        && incoming().createdAt is number;
+      allow update: if signedIn() && validFamily(family) && request.auth.uid == uid
+        && incoming().keys().hasOnly(['name', 'role', 'phone', 'email', 'createdAt'])
+        && incoming().keys().hasAll(['name', 'role', 'phone', 'email', 'createdAt'])
+        && incoming().name == resource.data.name
+        && incoming().role == resource.data.role
+        && incoming().email == resource.data.email
+        && incoming().createdAt == resource.data.createdAt
+        && validPhone(incoming().phone);
+      allow delete: if false;
+    }
+
+    // مكان كل فرد: صاحبه بس هو اللي يكتب (والـ id هو uid بتاعه).
+    match /families/{family}/locations/{uid} {
+      allow read: if signedIn() && validFamily(family);
+      allow create, update: if signedIn() && validFamily(family) && request.auth.uid == uid
+        && incoming().keys().hasOnly(['lat', 'lng', 'updatedAt'])
+        && incoming().keys().hasAll(['lat', 'lng', 'updatedAt'])
+        && validLatLng()
+        && incoming().updatedAt is number;
+      allow delete: if false;
+    }
+
+    // الأماكن المهمة: أي فرد في العيلة يضيف أو يمسح.
     match /families/{family}/places/{id} {
-      allow read: if validFamily(family);
-      allow create, update: if validFamily(family)
-        && request.resource.data.keys().hasOnly(['name', 'lat', 'lng', 'radius', 'createdBy'])
-        && request.resource.data.keys().hasAll(['name', 'lat', 'lng', 'radius', 'createdBy'])
-        && request.resource.data.name is string
-        && request.resource.data.name.size() >= 1 && request.resource.data.name.size() <= 40
-        && request.resource.data.lat is number
-        && request.resource.data.lat >= -90 && request.resource.data.lat <= 90
-        && request.resource.data.lng is number
-        && request.resource.data.lng >= -180 && request.resource.data.lng <= 180
-        && request.resource.data.radius is number
-        && request.resource.data.radius >= 50 && request.resource.data.radius <= 1000
-        && request.resource.data.createdBy is string
-        && request.resource.data.createdBy.size() <= 30;
-      allow delete: if validFamily(family);
+      allow read: if signedIn() && validFamily(family);
+      allow create, update: if signedIn() && validFamily(family)
+        && incoming().keys().hasOnly(['name', 'lat', 'lng', 'radius', 'createdBy'])
+        && incoming().keys().hasAll(['name', 'lat', 'lng', 'radius', 'createdBy'])
+        && incoming().name is string && incoming().name.size() >= 1 && incoming().name.size() <= 40
+        && validLatLng()
+        && incoming().radius is number && incoming().radius >= 50 && incoming().radius <= 1000
+        && incoming().createdBy == request.auth.uid;
+      allow delete: if signedIn() && validFamily(family);
     }
 
-    // الوصولات: families/{family}/events/{id} (بتتسجل بس، مفيش تعديل أو مسح)
+    // الوصولات وتنبيهات قفل الموقع: بتتسجل بس باسم صاحبها، ومفيش تعديل أو مسح.
     match /families/{family}/events/{id} {
-      allow read: if validFamily(family);
-      allow create: if validFamily(family)
-        && request.resource.data.keys().hasOnly(['who', 'role', 'place', 'at'])
-        && request.resource.data.keys().hasAll(['who', 'role', 'place', 'at'])
-        && request.resource.data.who is string && request.resource.data.who.size() <= 30
-        && request.resource.data.role is string && request.resource.data.role.size() <= 12
-        && request.resource.data.place is string && request.resource.data.place.size() <= 40
-        && request.resource.data.at is number;
+      allow read: if signedIn() && validFamily(family);
+      allow create: if signedIn() && validFamily(family)
+        && incoming().keys().hasOnly(['uid', 'who', 'role', 'place', 'type', 'at'])
+        && incoming().keys().hasAll(['uid', 'who', 'role', 'place', 'type', 'at'])
+        && incoming().uid == request.auth.uid
+        && incoming().who is string && incoming().who.size() <= 20
+        && incoming().role is string && incoming().role.size() <= 12
+        && incoming().place is string && incoming().place.size() <= 40
+        && incoming().type in ['arrive', 'location_off']
+        && incoming().at is number;
       allow update, delete: if false;
     }
   }
