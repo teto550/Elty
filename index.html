@@ -749,7 +749,7 @@ let members = {}, locs = {}, placesCache = [], evCache = [];
 try { placesCache = JSON.parse(localStorage.getItem('elty_places') || '[]'); } catch (e) {}
 
 // مفتاح CARTO المجاني للخريطة (carto.com/basemaps/apikey). لو فاضي بنستخدم خريطة OpenStreetMap العادية.
-const CARTO_KEY = '';
+const CARTO_KEY = 'cb1_4jkh_1_a2252abb440f011bbbbc8365';
 
 function initMap() {
   if (map || !window.L) return;
