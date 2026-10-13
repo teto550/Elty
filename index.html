@@ -338,6 +338,15 @@ a{color:var(--brand);}
     <div class="p-sec">
       <button class="mini" id="pReset" type="button">🔑 ابعتلي رابط تغيير الباسورد</button>
     </div>
+    <div class="p-sec">
+      <button class="mini" id="pSos" type="button" style="border-color:var(--coral); color:var(--coral);">🆘 ابعت تنبيه طوارئ للعيلة</button>
+      <div class="hint">بيوصّل للعيلة كلها إنك محتاج مساعدة ومعاه موقعك الحالي.</div>
+    </div>
+
+    <div class="p-sec">
+      <button class="mini" id="pLogout" type="button">🚪 تسجيل خروج</button>
+      <div class="hint">التتبع هيقف وموقعك مش هيتبعت للعيلة لحد ما تدخل تاني.</div>
+    </div>
     <button class="btn alt" id="pClose" type="button" style="margin-top:18px;">قفل</button>
   </div>
 </div>
@@ -372,7 +381,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
   getAuth, onAuthStateChanged, onIdTokenChanged, createUserWithEmailAndPassword,
-  signInWithEmailAndPassword, sendPasswordResetEmail, reauthenticateWithCredential, EmailAuthProvider
+  signInWithEmailAndPassword, sendPasswordResetEmail, reauthenticateWithCredential, EmailAuthProvider, signOut
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
 window.__eltyReady = true;
@@ -789,6 +798,7 @@ function popupHtml(uid) {
   let h = `<b>${esc(m.name)}</b> ${r ? '(' + r.label + ')' : ''}<br>`;
   h += pl ? `📌 في ${esc(pl)}<br>` : '';
   h += `آخر تحديث: ${fmtTime(l.updatedAt)}<br>${timeAgo(l.updatedAt)}`;
+  if (typeof l.battery === 'number') h += `<br>🔋 ${l.battery}%`;
   if (m.phone && uid !== (me && me.uid)) h += `<br><a href="tel:${esc(m.phone)}">📞 ${esc(m.phone)}</a>`;
   return h;
 }
@@ -828,7 +838,7 @@ function renderFamily() {
     const dot = age < 600000 ? 'fresh' : age < 3600000 ? 'warm' : '';
     const pl = placeAt(l);
     const status = l ? (pl ? `📌 في ${esc(pl)}` : 'برّه الأماكن المحددة') : 'لسه ما شاركش مكانه';
-    const when = l ? `آخر تحديث: ${fmtTime(l.updatedAt)} · ${timeAgo(l.updatedAt)}` : '';
+    const when = l ? `آخر تحديث: ${fmtTime(l.updatedAt)} · ${timeAgo(l.updatedAt)}${typeof l.battery === 'number' ? ' · 🔋 ' + l.battery + '%' : ''}` : '';
     const row = document.createElement('div');
     row.className = 'row';
     row.innerHTML = `
@@ -860,11 +870,13 @@ function eventText(ev) {
   const ic = r ? r.icon + ' ' : '';
   const f = isFemale(ev.role);
   if (ev.type === 'location_off') return `⚠️ ${ev.who} ${f ? 'قفلت' : 'قفل'} الموقع`;
+  if (ev.type === 'sos') return `🆘 ${ev.who} محتاج${f ? 'ة' : ''} مساعدة! شوف مكان${f ? 'ها' : 'ه'} على الخريطة`;
+  if (ev.type === 'leave') return `${ic}${ev.who} ${f ? 'غادرت' : 'غادر'} ${ev.place}`;
   return `${ic}${ev.who} ${f ? 'وصلت' : 'وصل'} ${ev.place}`;
 }
 function renderEvents() {
   const box = $('pEvents');
-  if (!evCache.length) { box.innerHTML = '<div class="empty">لسه محدش وصل مكان من الأماكن المحددة.</div>'; return; }
+  if (!evCache.length) { box.innerHTML = '<div class="empty">لسه مفيش وصول أو مغادرة للأماكن المحددة.</div>'; return; }
   box.innerHTML = '';
   evCache.forEach(ev => {
     const row = document.createElement('div');
@@ -892,10 +904,13 @@ function renderPlaces() {
     const go = document.createElement('button');
     go.className = 'ibtn'; go.textContent = '📍';
     go.onclick = () => { if (map) { map.setView([pl.lat, pl.lng], 16); $('sheet').classList.remove('tall'); } };
+    const edit = document.createElement('button');
+    edit.className = 'ibtn'; edit.textContent = '✏️'; edit.setAttribute('aria-label', 'تعديل');
+    edit.onclick = () => editPlace(pl);
     const del = document.createElement('button');
     del.className = 'ibtn'; del.textContent = '🗑';
     del.onclick = () => deletePlace(pl);
-    act.appendChild(go); act.appendChild(del);
+    act.appendChild(go); act.appendChild(edit); act.appendChild(del);
     list.appendChild(row);
   });
   if (!map) return;
@@ -951,6 +966,16 @@ $('addOnMap').onclick = () => {
   $('sheet').classList.remove('tall');
   map.once('click', (e) => { pickingPlace = false; msg.textContent = ''; createPlace(e.latlng.lat, e.latlng.lng); });
 };
+async function editPlace(pl) {
+  const name = (prompt('اسم المكان؟', pl.name) || '').trim().slice(0, 40);
+  if (!name) return;
+  let radius = parseInt(fixDigits(prompt('نصف القطر بالمتر؟ (50 إلى 1000)', String(pl.radius)) || String(pl.radius)), 10) || pl.radius;
+  radius = Math.max(50, Math.min(1000, radius));
+  try {
+    await updateDoc(fdoc('places', pl.id), { name, lat: pl.lat, lng: pl.lng, radius, createdBy: me.uid });
+    $('placeMsg').textContent = 'اتعدّل \"' + name + '\" ✅';
+  } catch (e) { $('placeMsg').textContent = 'تعذر التعديل: ' + errText(e); }
+}
 async function deletePlace(pl) {
   if (!confirm('تمسح "' + pl.name + '" لكل العيلة؟')) return;
   try { await deleteDoc(fdoc('places', pl.id)); }
@@ -986,18 +1011,20 @@ async function checkArrival(lat, lng) {
   if (!me || !placesCache.length) return;
   let state = {};
   try { state = JSON.parse(localStorage.getItem('elty_inside') || '{}'); } catch (e) {}
-  const arrived = [];
+  const arrived = [], left = [];
   placesCache.forEach(pl => {
     const d = distM(lat, lng, pl.lat, pl.lng), r = pl.radius || 150, was = state[pl.id];
     if (d <= r) {
       if (was === false) arrived.push(pl);
       if (was !== true) state[pl.id] = true;
     } else if (d > r * 1.3 && was !== false) {
+      if (was === true) left.push(pl);
       state[pl.id] = false;
     }
   });
   localStorage.setItem('elty_inside', JSON.stringify(state));
   for (const pl of arrived) { try { await sendEvent('arrive', pl.name); } catch (e) {} }
+  for (const pl of left) { try { await sendEvent('leave', pl.name); } catch (e) {} }
 }
 
 async function pollEvents() {
@@ -1036,15 +1063,27 @@ async function refreshPlacesREST() {
 }
 
 /* =====================  مشاركة الموقع  ===================== */
+let battPct = null;
+try {
+  if (navigator.getBattery) navigator.getBattery().then((b) => {
+    const upd = () => { battPct = Math.round(b.level * 100); };
+    upd(); b.addEventListener('levelchange', upd);
+  }).catch(() => {});
+} catch (e) {}
+
 async function writeLocation(lat, lng) {
   if (isNative) {
-    await httpJson(`${famFS()}/locations/${me.uid}?key=${KEY}`, 'PATCH', { fields: {
+    const fields = {
       lat: { doubleValue: lat },
       lng: { doubleValue: lng },
       updatedAt: { integerValue: String(Date.now()) }
-    } });
+    };
+    if (battPct != null) fields.battery = { integerValue: String(battPct) };
+    await httpJson(`${famFS()}/locations/${me.uid}?key=${KEY}`, 'PATCH', { fields });
   } else {
-    await setDoc(fdoc('locations', me.uid), { lat, lng, updatedAt: Date.now() });
+    const data = { lat, lng, updatedAt: Date.now() };
+    if (battPct != null) data.battery = battPct;
+    await setDoc(fdoc('locations', me.uid), data);
   }
 }
 
@@ -1185,6 +1224,27 @@ $('pShare').onclick = async () => { await shareNow(); toast('اتحدّث موق
 $('pReset').onclick = async () => {
   try { await sendPasswordResetEmail(auth, me.email); toast('بعتنا رابط تغيير الباسورد على الإيميل.'); }
   catch (e) { $('pErr').textContent = errText(e); }
+};
+$('pSos').onclick = async () => {
+  if (!confirm('تبعت تنبيه طوارئ لكل العيلة؟')) return;
+  try {
+    await shareNow();
+    await sendEvent('sos', '');
+    toast('اتبعت تنبيه الطوارئ للعيلة 🆘');
+  } catch (e) { $('pErr').textContent = 'تعذر إرسال التنبيه: ' + errText(e); }
+};
+$('pLogout').onclick = async () => {
+  if (!confirm('تسجل خروج؟ التتبع هيقف والعيلة مش هتشوف موقعك.')) return;
+  try {
+    stopNativeTracking();
+    unsub.forEach(u => u());
+    unsub = [];
+    if (bioOn()) await bioDisable();
+    ['elty_idtoken', 'elty_idexp', 'elty_refresh', 'elty_famid', 'elty_last_event', 'elty_inside', 'elty_places']
+      .forEach(k => localStorage.removeItem(k));
+    await signOut(auth);
+  } catch (e) { $('pErr').textContent = errText(e); return; }
+  location.reload();
 };
 $('pBio').onclick = async () => {
   try {

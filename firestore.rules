@@ -59,10 +59,11 @@ service cloud.firestore {
     match /families/{family}/locations/{uid} {
       allow read: if signedIn() && validFamily(family);
       allow create, update: if signedIn() && validFamily(family) && request.auth.uid == uid
-        && incoming().keys().hasOnly(['lat', 'lng', 'updatedAt'])
+        && incoming().keys().hasOnly(['lat', 'lng', 'updatedAt', 'battery'])
         && incoming().keys().hasAll(['lat', 'lng', 'updatedAt'])
         && validLatLng()
-        && incoming().updatedAt is number;
+        && incoming().updatedAt is number
+        && (!('battery' in incoming()) || (incoming().battery is number && incoming().battery >= 0 && incoming().battery <= 100));
       allow delete: if false;
     }
 
@@ -79,7 +80,7 @@ service cloud.firestore {
       allow delete: if signedIn() && validFamily(family);
     }
 
-    // الوصولات وتنبيهات قفل الموقع: بتتسجل بس باسم صاحبها، ومفيش تعديل أو مسح.
+    // الوصول والمغادرة وتنبيهات قفل الموقع والطوارئ: بتتسجل بس باسم صاحبها، ومفيش تعديل أو مسح.
     match /families/{family}/events/{id} {
       allow read: if signedIn() && validFamily(family);
       allow create: if signedIn() && validFamily(family)
@@ -89,7 +90,7 @@ service cloud.firestore {
         && incoming().who is string && incoming().who.size() <= 20
         && incoming().role is string && incoming().role.size() <= 12
         && incoming().place is string && incoming().place.size() <= 40
-        && incoming().type in ['arrive', 'location_off']
+        && incoming().type in ['arrive', 'leave', 'location_off', 'sos']
         && incoming().at is number;
       allow update, delete: if false;
     }
